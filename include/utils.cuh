@@ -22,6 +22,14 @@
     } while (0)
 
 
+#define NOT_REACHABLE() \
+    do { \
+        std::fprintf(stderr, "Unreachable thing reached at %s:%d\n", __FILE__, __LINE__); \
+        std::abort(); \
+    } while (0)
+
+
+
 #define CUDA_CHECK(call) {                                                 \
     cudaError_t err = call;                                                \
     if (err != cudaSuccess) {                                              \
@@ -73,12 +81,33 @@ T * d2h_cpy(T * d_arr, size_t n)
 
 
 template <typename T>
+void d2h_cpy(T * h_arr, T * d_arr, size_t n)
+{
+    CUDA_CHECK(cudaMemcpy(h_arr, d_arr, sizeof(T) * n, cudaMemcpyDeviceToHost));
+}
+
+
+template <typename T>
 T * h2d_cpy(T * h_arr, size_t n)
 {
     T * d_arr;
     CUDA_CHECK(cudaMalloc(&d_arr, sizeof(T) * n));
-    CUDA_CHECK(cudaMemcpy(d_arr, h_arr, sizeof(T) * n, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(d_arr, h_arr, sizeof(T) * n, cudaMemcpyHostToDevice));
     return d_arr;
+}
+
+
+template <typename T>
+void h2d_cpy(T * d_arr, T * h_arr, size_t n)
+{
+    CUDA_CHECK(cudaMemcpy(d_arr, h_arr, sizeof(T) * n, cudaMemcpyHostToDevice));
+}
+
+
+template <typename T>
+T * h2d_cpy(std::vector<T> h_arr)
+{
+    return h2d_cpy(h_arr.data(), h_arr.size());
 }
 
 

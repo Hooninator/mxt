@@ -25,7 +25,7 @@ void parse_frostt_line(std::string& line, Index_t& idx, Value_t& val)
 
 
 template <typename SparseTensor_t>
-SparseTensor_t read_tensor_frostt(const char * fpath)
+SparseTensor_t read_tensor_frostt(const char * fpath, typename SparseTensor_t::Index& modes)
 {
 
     using Index_t = typename SparseTensor_t::Index;
@@ -64,8 +64,7 @@ SparseTensor_t read_tensor_frostt(const char * fpath)
         vals.push_back(val);
     }
 
-    SparseTensor_t tensor(std::move(inds), std::move(vals));
-
+    SparseTensor_t tensor(inds, vals, modes);
     return tensor;
 }
 
