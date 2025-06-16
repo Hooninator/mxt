@@ -8,22 +8,33 @@
 namespace mxt
 {
 
-template <uint32_t O, typename VT, typename IT>
+template <size_t... Dims>
+struct Shape
+{
+    static constexpr std::array<size_t, sizeof...(Dims)> dims = {Dims...};
+};
+
+
+template <typename VT, typename IT, uint32_t _Order, typename Shape>
 class SparseTensor
 {
 public:
 
-    using ValueType = VT;
-    using IndexType = IT;
-    static constexpr uint32_t Order = O;
+    using ValueType_t = VT;
+    using IndexType_t = IT;
 
-    using Index = std::array<IndexType, Order>;
+    static constexpr uint32_t Order = _Order;
+
+    using Index_t = std::array<IndexType_t, Order>;
+
+    static constexpr Index_t Modes = Shape::dims;
+    using ShapeType_t = Shape;
+
 
     SparseTensor(){}
 
-    SparseTensor(std::vector<Index>& inds, std::vector<ValueType>& vals, Index& modes):
+    SparseTensor(std::vector<Index_t>& inds, std::vector<ValueType_t>& vals):
         nnz(inds.size()), 
-        mode_sizes(modes),
         d_vals(utils::h2d_cpy(vals)),
         d_inds(utils::h2d_cpy(inds))
     {
@@ -33,24 +44,24 @@ public:
 
     inline size_t bytes_vals()
     {
-        return sizeof(ValueType) * this->nnz;
+        return sizeof(ValueType_t) * this->nnz;
     }
 
 
     inline size_t bytes_inds()
     {
-        return sizeof(Index) * this->nnz;
+        return sizeof(Index_t) * this->nnz;
     }
 
 
     void dump(std::ofstream& ofs)
     {
-        Index * inds = utils::d2h_cpy(d_inds, nnz);
-        ValueType * vals = utils::d2h_cpy(d_vals, nnz);
+        Index_t * inds = utils::d2h_cpy(d_inds, nnz);
+        ValueType_t * vals = utils::d2h_cpy(d_vals, nnz);
         for (size_t i=0; i<nnz; i++)
         {
-            Index& index = inds[i];
-            ValueType& val = vals[i];
+            Index_t& index = inds[i];
+            ValueType_t& val = vals[i];
 
             ofs<<"(";
             for (uint32_t j = 0; j < Order; j++)
@@ -65,18 +76,16 @@ public:
     }
 
 
-    inline ValueType * get_d_vals() {return d_vals;}
-    inline Index * get_d_inds() {return d_inds;}
-    inline Index get_mode_sizes() {return mode_sizes;}
+    inline ValueType_t * get_d_vals() {return d_vals;}
+    inline Index_t * get_d_inds() {return d_inds;}
     inline size_t get_nnz() const {return nnz;}
 
 
 private:
 
-    ValueType * d_vals;
-    Index * d_inds;
+    ValueType_t * d_vals;
+    Index_t * d_inds;
 
-    Index mode_sizes;
     size_t nnz;
 
 };

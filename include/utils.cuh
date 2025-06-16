@@ -1,8 +1,12 @@
 #ifndef UTILS_CUH
 #define UTILS_CUH
 
+#include <thrust/transform.h>
+#include <thrust/device_ptr.h>
+
 #include "common.cuh"
 #include "Timer.hpp"
+
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,7 +67,6 @@ namespace mxt
 
 namespace utils
 {
-
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,6 +145,39 @@ inline void print_separator(const char * s)
     std::cout<<"====================="<<s<<"====================="<<std::endl;
     sleep(1);
 }
+
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *               PRECISION 
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+template <typename T1, typename T2>
+struct round_functor
+{
+    __host__ __device__ __forceinline__
+    T2 operator()(T1 x) 
+    {
+        return T2(x);
+    }
+};
+
+template <typename T1, typename T2>
+T2 * d_to_u(T1 * d_in, const size_t n)
+{
+    T2 * d_out;
+    CUDA_CHECK(cudaMalloc(&d_out, sizeof(T2) * n));
+
+    auto d_in_ptr = thrust::device_pointer_cast<T1>(d_in);
+    auto d_out_ptr = thrust::device_pointer_cast<T2>(d_out);
+
+    thrust::transform(d_in_ptr, d_in_ptr + n, d_out_ptr, round_functor<T1, T2>{});
+
+    return d_out;
+}
+
 
 
 }// utils
