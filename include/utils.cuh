@@ -178,6 +178,24 @@ T2 * d_to_u(T1 * d_in, const size_t n)
     return d_out;
 }
 
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *                   MISC
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+template <typename T, std::size_t... Is>
+inline constexpr std::array<T, sizeof...(Is)> make_array_impl(std::index_sequence<Is...>) {
+    return { (static_cast<void>(Is), T{})... };
+}
+
+
+template <typename T, std::size_t N>
+inline constexpr std::array<T, N> make_array() 
+{
+    return make_array_impl<T>(std::make_index_sequence<N>{});
+}
 
 
 }// utils

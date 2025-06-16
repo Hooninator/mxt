@@ -71,6 +71,20 @@ struct TuckerTensor
 };
 
 
+template <typename SparseTensor_t>
+std::array<DeviceWorkspace<typename SparseTensor_t::Index_t>, SparseTensor_t::Order> symbolic_ttmc(SparseTensor_t& X)
+{
+    using Workspace = DeviceWorkspace<typename SparseTensor_t::Index_t>;
+
+    /* Y_n_contribs[n][i] -- indices of the ith mode-n slice X(:, :, ..., i_n, ..., :) */
+    std::array<Workspace, SparseTensor_t::Order> Y_n_contribs = 
+        utils::make_array<Workspace, SparseTensor_t::Order>();
+
+
+    return Y_n_contribs;
+}
+
+
 template <typename SparseTensor_t, typename TuckerShape, typename Ttmc_u, typename Lra_u>
 TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor_t& X, const char * init, const size_t maxiters)
 {
@@ -97,6 +111,11 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
 
     DeviceWorkspace<Ttmc_u> workspace(largest_mode * Rn_minus_1);
     Ttmc_u * d_Y_n = workspace.d_data;
+
+    /* Symbolic TTMc -- record indices of all nonzeros that contribute to each row of the TTMc outputs 
+     * Each entry of this array is a device pointer
+     */
+    std::array<DeviceWorkspace<Index_t>, N> Y_n_contibs = symbolic_ttmc(X);
 
     /* Main Loop */
     for (size_t iter = 0; iter < maxiters; iter++)
