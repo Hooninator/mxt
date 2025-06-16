@@ -10,28 +10,30 @@
 namespace mxt
 {
 
-template <typename SparseTensor_t>
+template <typename SparseTensor_t, auto _TuckerRanks>
 struct TuckerTensor
 {
     using ValueType_t = SparseTensor_t::ValueType;
     using IndexType_t = SparseTensor_t::IndexType;
     using Index_t = SparseTensor_t::Index;
     static constexpr uint32_t Order = SparseTensor_t::Order;
+    static constexpr Index_t TuckerRanks = _TuckerRanks;
 
-    TuckerTensor(Index_t& input_modes, Index_t& tucker_ranks, const char * init)
+    static_assert( TuckerRanks.size() == Order );
+
+    TuckerTensor(Index_t& input_modes, const char * init)
     {
         input_modes = input_modes;
-        tucker_ranks = tucker_ranks;
-        init_factors(input_modes, tucker_ranks, init);
+        init_factors(input_modes, init);
     }
 
     
-    void init_factors(Index_t& input_modes, Index_t& tucker_ranks, const char * init)
+    void init_factors(Index_t& input_modes, const char * init)
     {
         std::string init_str(init);
         if (init_str.compare("randn")==0)
         {
-            init_factors_randn(input_modes, tucker_ranks);
+            init_factors_randn(input_modes);
         }
         else
         {
@@ -40,12 +42,12 @@ struct TuckerTensor
     }
 
 
-    void init_factors_randn(Index_t& input_modes, Index_t& tucker_ranks)
+    void init_factors_randn(Index_t& input_modes)
     {
         factors.reserve(Order);
         for (uint32_t i=0; i<Order; i++)
         {
-            IndexType_t sz = input_modes[i] * tucker_ranks[i];
+            IndexType_t sz = input_modes[i] * TuckerRanks[i];
             rand::randn_buffer(factors[i], sz);
         }
     }
@@ -60,21 +62,22 @@ struct TuckerTensor
     SparseTensor_t core;
     std::vector<ValueType_t *> factors;
     Index_t input_modes;
-    Index_t tucker_ranks;
 };
 
 
-template <typename SparseTensor_t, typename ttmc_u, typename lra_u>
-TuckerTensor<SparseTensor_t> mixed_sparse_hooi(SparseTensor_t& X, typename SparseTensor_t::Index& tucker_ranks, const char * init, const size_t maxiters)
+template <typename SparseTensor_t, auto _TuckerRanks, typename Ttmc_u, typename Lra_u>
+TuckerTensor<SparseTensor_t, _TuckerRanks> mixed_sparse_hooi(SparseTensor_t& X, const char * init, const size_t maxiters)
 {
     using ValueType_t = SparseTensor_t::ValueType;
     using IndexType_t = SparseTensor_t::IndexType;
     using Index_t = SparseTensor_t::Index;
 
-    const uint32_t N = SparseTensor_t::Order;
+    static constexpr uint32_t N = SparseTensor_t::Order;
+    static constexpr Index_t TuckerRanks = _TuckerRanks;
+
     Index_t modes = X.get_mode_sizes();
 
-    TuckerTensor<SparseTensor_t> X_tucker(modes, tucker_ranks, init);
+    TuckerTensor<SparseTensor_t, TuckerRanks> X_tucker(modes, init);
 
 
     /* Main Loop */
