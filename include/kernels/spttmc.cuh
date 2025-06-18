@@ -3,12 +3,13 @@
 
 #include "common.cuh"
 #include "kernel_utils.cuh"
+#include "../SymbolicTTMC.cuh"
 
 namespace mxt
 {
 
 template <typename ValueType, typename IndexType, typename Index, size_t Smem, typename MatNRows, typename MatNCols, size_t TotalCols>
-__global__ void spttmc_kernel(ValueType * d_vals, Index * d_inds, ValueType ** d_matrices, ValueType * d_out, const size_t nnz, const int exclude)
+__global__ void spttmc_kernel(ValueType * d_vals, Index * d_inds, ValueType ** d_matrices, size_t * d_Y_n_inds, size_t * d_Y_n_offsets, ValueType * d_out, const size_t nnz, const int exclude)
 {
     const uint32_t bid = blockIdx.x;
     const uint32_t tid = kernel_utils::tid_1d();
@@ -24,7 +25,7 @@ __global__ void spttmc_kernel(ValueType * d_vals, Index * d_inds, ValueType ** d
 
 
 template <typename ValueType, typename IndexType, typename Index, typename MatNRowsShape, typename MatNColsShape>
-void spttmc(ValueType * d_vals, Index * d_inds, ValueType ** d_matrices, ValueType * d_out, const size_t nnz, const int exclude)
+void spttmc(ValueType * d_vals, Index * d_inds, ValueType ** d_matrices, SymbolicTTMC& symb, ValueType * d_out, const size_t nnz, const int exclude)
 {
     /* Bookkeeping */
     static constexpr Index MatNRows = MatNRowsShape::dims;
@@ -49,7 +50,7 @@ void spttmc(ValueType * d_vals, Index * d_inds, ValueType ** d_matrices, ValueTy
     /* Call the kernel */
     spttmc_kernel<ValueType, IndexType, Index, Smem, MatNRowsShape, MatNColsShape, TotalCols>
         <<<nblocks, tpb>>>
-        (d_vals, d_inds, d_matrices, d_out, nnz, exclude);
+        (d_vals, d_inds, d_matrices, symb.d_Y_n_inds.d_data, symb.d_Y_n_offsets.d_data, d_out, nnz, exclude);
     CUDA_CHECK(cudaDeviceSynchronize());
 }
 
