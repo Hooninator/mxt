@@ -110,7 +110,7 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
         for (uint32_t n=0; n < N; n++)
         {
             /* TTM chain with all but U[n] */
-            spttmc<Ttmc_u, IndexType_t, Index_t, InputShape, TuckerShape>(d_X_vals, d_X_inds, d_U_list, symbolic_ttmc, d_Y_n, nnz, n);
+            spttmc<Ttmc_u, IndexType_t, Index_t, N, InputShape, TuckerShape>(d_X_vals, d_X_inds, d_U_list, symbolic_ttmc, d_Y_n, nnz, n);
 
             /* Update U[n] with truncated SVD */
 

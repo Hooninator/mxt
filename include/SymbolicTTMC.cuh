@@ -53,10 +53,13 @@ struct SymbolicTTMC
         std::inclusive_scan(h_Y_n_offsets.begin(), h_Y_n_offsets.end(), h_Y_n_offsets.begin());
 
         d_Y_n_inds.alloc(nnz * Order);
-        d_Y_n_offsets.alloc(ModeSum);
+        d_Y_n_offsets.alloc(ModeSum + 1);
+        d_Y_mode_offsets.alloc(Order);
+
 
         // Move to device
         d_Y_n_offsets.h2d_cpy(h_Y_n_offsets.data(), h_Y_n_offsets.size());
+        d_Y_mode_offsets.h2d_cpy(mode_offsets.data(), mode_offsets.size());
 
         // Indices to device
         size_t offset = 0;
@@ -75,6 +78,7 @@ struct SymbolicTTMC
 
     DeviceWorkspace<size_t> d_Y_n_inds;
     DeviceWorkspace<size_t> d_Y_n_offsets;
+    DeviceWorkspace<size_t> d_Y_mode_offsets;
 };
 
 } //mxt
