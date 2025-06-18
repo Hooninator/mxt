@@ -72,17 +72,75 @@ struct TuckerTensor
 
 
 template <typename SparseTensor_t>
-std::array<DeviceWorkspace<typename SparseTensor_t::Index_t>, SparseTensor_t::Order> symbolic_ttmc(SparseTensor_t& X)
+struct SymbolicTTMC
 {
-    using Workspace = DeviceWorkspace<typename SparseTensor_t::Index_t>;
 
-    /* Y_n_contribs[n][i] -- indices of the ith mode-n slice X(:, :, ..., i_n, ..., :) */
-    std::array<Workspace, SparseTensor_t::Order> Y_n_contribs = 
-        utils::make_array<Workspace, SparseTensor_t::Order>();
+    SymbolicTTMC (SparseTensor_t& X)
+    {
+        using Index_t = SparseTensor_t::Index_t;
+        using IndexType_t = SparseTensor_t::IndexType_t;
+        using Workspace = DeviceWorkspace<size_t>;
 
+        static constexpr uint32_t Order = SparseTensor_t::Order;
+        static constexpr Index_t Modes = SparseTensor_t::Modes;
 
-    return Y_n_contribs;
-}
+        /* Y_n_inds[n][i] -- indices of the ith mode-n slice X(:, :, ..., i_n, ..., :) */
+        const size_t nnz = X.get_nnz();
+
+        // First index determines mode unfolding, second determines row index of Y_n, then you have the acutal index list
+        std::vector<std::vector<std::vector<size_t> > > h_Y_n_inds;
+
+        static constexpr size_t ModeSum = std::reduce(Modes.begin(), Modes.end(), 0);
+        std::vector<size_t> h_Y_n_offsets(ModeSum + 1, 0);
+
+        std::vector<size_t> mode_offsets(Order, 0);
+        std::exclusive_scan(Modes.begin(), Modes.end(), mode_offsets.begin(), 0);
+
+        h_Y_n_inds.resize(Order);
+        for (size_t n=0; n<Order; n++)
+        {
+            h_Y_n_inds[n].resize(Modes[n]);
+        }
+
+        Index_t * h_inds = utils::d2h_cpy(X.get_d_inds(), nnz);
+
+        for (size_t i=0; i<nnz; i++)
+        {
+            Index_t idx = h_inds[i];
+            for (uint32_t n=0; n < Order; n++)
+            {
+                h_Y_n_inds[n][idx[n]].push_back(i);
+                size_t offset = idx[n] + mode_offsets[n];
+                h_Y_n_offsets[offset + 1] += 1;
+            }
+        }
+
+        std::inclusive_scan(h_Y_n_offsets.begin(), h_Y_n_offsets.end(), h_Y_n_offsets.begin());
+
+        d_Y_n_inds.alloc(nnz * Order);
+        d_Y_n_offsets.alloc(ModeSum);
+
+        // Move to device
+        d_Y_n_offsets.h2d_cpy(h_Y_n_offsets.data(), h_Y_n_offsets.size());
+
+        // Indices to device
+        size_t offset = 0;
+        for (size_t n=0; n < Order; n++)
+        {
+            for (size_t i=0; i < Modes[n]; i++)
+            {
+                d_Y_n_inds.h2d_cpy(h_Y_n_inds[n][i].data(), h_Y_n_inds[n][i].size(), offset);
+                offset += Modes[n];
+            }
+        }
+
+        delete[] h_inds;
+
+    }
+
+    DeviceWorkspace<size_t> d_Y_n_inds;
+    DeviceWorkspace<size_t> d_Y_n_offsets;
+};
 
 
 template <typename SparseTensor_t, typename TuckerShape, typename Ttmc_u, typename Lra_u>
@@ -115,7 +173,7 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
     /* Symbolic TTMc -- record indices of all nonzeros that contribute to each row of the TTMc outputs 
      * Each entry of this array is a device pointer
      */
-    std::array<DeviceWorkspace<Index_t>, N> Y_n_contibs = symbolic_ttmc(X);
+    SymbolicTTMC symbolic_ttmc(X);
 
     /* Main Loop */
     for (size_t iter = 0; iter < maxiters; iter++)
