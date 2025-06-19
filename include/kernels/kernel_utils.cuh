@@ -17,14 +17,14 @@ uint32_t tid_1d()
 
 
 __device__ __forceinline__
-uint32_t lid()
+uint8_t lid()
 {
     return threadIdx.x % warpSize;
 }
 
 
 __device__ __forceinline__
-uint32_t wid()
+uint8_t wid()
 {
     return threadIdx.x / warpSize;
 }

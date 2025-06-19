@@ -9,6 +9,8 @@ namespace mxt
 struct SymbolicTTMC
 {
 
+    //TODO: Add more fields to this, some static ones that tell us info about dimensions of X
+
     template <typename SparseTensor_t>
     SymbolicTTMC (SparseTensor_t& X)
     {
@@ -77,8 +79,8 @@ struct SymbolicTTMC
     }
 
     DeviceWorkspace<size_t> d_Y_n_inds;
-    DeviceWorkspace<size_t> d_Y_n_offsets;
-    DeviceWorkspace<size_t> d_Y_mode_offsets;
+    DeviceWorkspace<size_t> d_Y_n_offsets; // Starting index in d_Y_n_inds of each row of all unfoldings
+    DeviceWorkspace<size_t> d_Y_mode_offsets; // Starting index in d_Y_n_offsets of rows corresponding to each unfolding
 };
 
 } //mxt
