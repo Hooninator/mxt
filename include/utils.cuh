@@ -198,6 +198,24 @@ inline constexpr std::array<T, N> make_array()
 }
 
 
+//template <typename T, std::size_t N, std::size_t Exclude>
+//__device__ __host__ __forceinline__
+//constexpr std::array<T, N - 1> remove_one(const std::array<T, N>& arr)
+//{
+//    std::index_sequence<(std::make_index_sequence<N>{})...> Is;
+//
+//    auto constexpr Excluded = []<std::size_t... Js>(const std::array<T, N> arr2, std::index_sequence<Js...>)
+//    {
+//        std::array<T, N - 1> result{};
+//        size_t idx = 0;
+//        ((Js != Exclude ? (result[idx++] = arr[Js], 0) : 0), ...);
+//        return result;
+//    }(arr, Is);
+//
+//    return Excluded;
+//}
+
+
 }// utils
 }// mxt
 

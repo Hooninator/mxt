@@ -29,6 +29,10 @@ uint8_t wid()
     return threadIdx.x / warpSize;
 }
 
+
+
+
+
 } //kernel_utils
 } //mxt
 

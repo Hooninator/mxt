@@ -2,17 +2,12 @@
 #define SPARSE_TENSOR_CUH
 
 #include "common.cuh"
+#include "Shape.cuh"
 #include "utils.cuh"
 
 
 namespace mxt
 {
-
-template <size_t... Dims>
-struct Shape
-{
-    static constexpr std::array<size_t, sizeof...(Dims)> dims = {Dims...};
-};
 
 
 template <typename VT, typename IT, uint32_t _Order, typename Shape>
