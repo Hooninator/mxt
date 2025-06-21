@@ -24,7 +24,7 @@ macro(add_test name)
     add_executable(${name} test/${name}.cu)
     target_include_directories(${name} PUBLIC include)
     target_compile_options(${name} PRIVATE ${COMPILER_FLAGS})
-    target_link_libraries(mxt PRIVATE MPI::MPI_CXX CUDA::cudart CUDA::cusparse CUDA::cublas CUDA::cusolver)
+    target_link_libraries(${name} PRIVATE MPI::MPI_CXX CUDA::cudart CUDA::cusparse CUDA::cublas CUDA::cusolver)
 endmacro()
 
 add_test(driver)

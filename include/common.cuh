@@ -26,6 +26,6 @@
 #include <cusolverDn.h>
 
 #define DEBUG 2
-#define DEBUG_SPTTMC_KERNEL 1
+#define DEBUG_SPTTMC_KERNEL 0
 
 #endif

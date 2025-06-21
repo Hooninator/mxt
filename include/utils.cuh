@@ -74,6 +74,16 @@
 } while(0)
 
 
+#define CUSOLVER_CHECK(call) do {                                    \
+    cusolverStatus_t err = call;                                     \
+    if (err != CUSOLVER_STATUS_SUCCESS) {                            \
+        fprintf(stderr, "cuSolver error in file '%s' in line %i.\n", \
+                __FILE__, __LINE__);    \
+        exit(EXIT_FAILURE);                                          \
+    }                                                                \
+} while(0)
+
+
 #define CUDA_FREE(buf) do { \
     if (buf != nullptr) \
     { \
@@ -279,12 +289,18 @@ T2 * d_to_u(T1 * d_in, const size_t n)
 }
 
 
-
+template <typename T1, typename T2>
+void d_to_u(T1 * d_in, T2 * d_out, const size_t n)
+{
+    auto d_in_ptr = thrust::device_pointer_cast<T1>(d_in);
+    auto d_out_ptr = thrust::device_pointer_cast<T2>(d_out);
+    thrust::transform(d_in_ptr, d_in_ptr + n, d_out_ptr, round_functor<T1, T2>{});
+}
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *                   MISC
+ *                   ARRAYS 
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
@@ -302,22 +318,33 @@ inline constexpr std::array<T, N> make_array()
 }
 
 
-//template <typename T, std::size_t N, std::size_t Exclude>
-//__device__ __host__ __forceinline__
-//constexpr std::array<T, N - 1> remove_one(const std::array<T, N>& arr)
-//{
-//    std::index_sequence<(std::make_index_sequence<N>{})...> Is;
-//
-//    auto constexpr Excluded = []<std::size_t... Js>(const std::array<T, N> arr2, std::index_sequence<Js...>)
-//    {
-//        std::array<T, N - 1> result{};
-//        size_t idx = 0;
-//        ((Js != Exclude ? (result[idx++] = arr[Js], 0) : 0), ...);
-//        return result;
-//    }(arr, Is);
-//
-//    return Excluded;
-//}
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *                 CUDA TYPES
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+template <typename T>
+inline constexpr cudaDataType to_cuda_dtype()
+{
+    if constexpr(std::is_same<T, float>::value)
+    {
+        return CUDA_R_32F;
+    }
+    else if constexpr(std::is_same<T, double>::value)
+    {
+        return CUDA_R_64F;
+    }
+    else if constexpr(std::is_same<T, __half>::value)
+    {
+        return CUDA_R_16F;
+    }
+}
+
+
+    
+
 
 
 }// utils

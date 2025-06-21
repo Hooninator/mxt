@@ -6,6 +6,7 @@
 #include "SymbolicTTMC.cuh"
 #include "utils.cuh"
 #include "rand/rand_matrix.cuh"
+#include "linalg/svd.cuh"
 #include "kernels/spttmc.cuh"
 #include "DeviceWorkspace.cuh"
 
@@ -86,6 +87,10 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
     utils::logfile.open("logfile.out");
 #endif
 
+    //TODO: Move this
+    cusolverDnHandle_t handle;
+    CUSOLVER_CHECK(cusolverDnCreate(&handle));
+
     using ValueType_t = SparseTensor_t::ValueType_t;
     using IndexType_t = SparseTensor_t::IndexType_t;
     using Index_t = SparseTensor_t::Index_t;
@@ -145,7 +150,9 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
             DEBUG_PRINT("Mode %u ttmc done", n);
 
             /* Update U[n] with truncated SVD */
+            linalg::llsv_randsvd<Lra_u, Ttmc_u, IndexType_t, 10, 2>(handle, d_Y_n, d_U_list[n], InputModes[n], (Rn / TuckerRanks[n]), TuckerRanks[n]);
 
+            DEBUG_PRINT("Mode %u llsv done", n);
         }
 
         /* Check error/convergence */
@@ -160,6 +167,8 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
 #endif
 
     /* Form core tensor */
+
+    CUSOLVER_CHECK(cusolverDnDestroy(handle));
 
     return X_tucker;
 }
