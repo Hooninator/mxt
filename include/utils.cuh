@@ -15,6 +15,26 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
+#if DEBUG >= 1
+#define DEBUG_PRINT(msg, ...) \
+    do { \
+        std::printf("%s:%d -- ", __FILE__, __LINE__); \
+        std::printf(msg "\n", ##__VA_ARGS__); \
+        std::flush(std::cout);\
+    } while (0)
+
+#define CHECKPOINT() \
+    do { \
+        std::printf("CHECKPOINT: %s:%d\n", __FILE__, __LINE__); \
+        std::flush(std::cout);\
+    } while (0)
+
+#else
+#define DEBUG_PRINT(msg, ...)
+#define CHECKPOINT()
+#endif
+
+
 #define ASSERT(cond, fmt, ...)                                                \
     do {                                                                          \
         if (!(cond)) {                                                            \
@@ -67,6 +87,11 @@ namespace mxt
 
 namespace utils
 {
+
+
+#if DEBUG >= 2
+std::ofstream logfile;
+#endif
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -122,11 +147,21 @@ T * h2d_cpy(std::vector<T> h_arr)
 */
 
 template <typename T, typename... Args>
+void print_h_vec(std::vector<T>& vec, const char * prefix, Args... args)
+{
+    print_h_arr(vec.data(), vec.size(), prefix, args...);
+}
+
+
+template <typename T, typename... Args>
 void print_h_arr(T * h_arr, size_t n, const char * prefix, Args... args)
 {
     std::printf(prefix, args...);
     std::printf("\n");
-    std::for_each(std::begin(h_arr), std::begin(h_arr) + n, [](const T& x){std::cout<<x<<'\n';});
+    for (size_t i=0; i<n; i++)
+    {
+        std::cout<<h_arr[i]<<'\n';
+    }
     std::flush(std::cout);
 }
 
@@ -143,7 +178,36 @@ void print_d_arr(T * d_arr, size_t n, const char * prefix, Args... args)
 inline void print_separator(const char * s)
 {
     std::cout<<"====================="<<s<<"====================="<<std::endl;
-    sleep(1);
+    std::cout<<std::endl;
+}
+
+
+template <typename T>
+void write_h_arr(std::ofstream& ofs, T * h_arr, size_t n, const char * prefix)
+{
+    ofs<<prefix<<"\n";
+    for (int i=0; i<n; i++)
+    {
+        ofs<<h_arr[i]<<'\n';
+    }
+    std::flush(ofs);
+}
+
+
+template <typename T>
+void write_d_arr(std::ofstream& ofs, T * d_arr, size_t n, const char * prefix)
+{
+    T * h_arr = d2h_cpy(d_arr, n);
+    write_h_arr(ofs, h_arr, n, prefix);
+    delete[] h_arr;
+}
+
+
+inline void debug_print_separator(const char * s)
+{
+#if DEBUG >= 1
+    print_separator(s);
+#endif
 }
 
 
@@ -160,7 +224,43 @@ struct round_functor
     __host__ __device__ __forceinline__
     T2 operator()(T1 x) 
     {
-        return T2(x);
+        if constexpr(std::is_same<T1, T2>::value)
+        {
+            return x;
+        }
+        if constexpr(std::is_same<T1, double>::value)
+        {
+            if constexpr(std::is_same<T2, half>::value)
+            {
+                return __double2half(x);
+            }
+            if constexpr(std::is_same<T2, float>::value)
+            {
+                return (float)(x);
+            }
+        }
+        if constexpr(std::is_same<T1, float>::value)
+        {
+            if constexpr(std::is_same<T2, half>::value)
+            {
+                return __float2half(x);
+            }
+            if constexpr(std::is_same<T2, double>::value)
+            {
+                return (double)(x);
+            }
+        }
+        if constexpr(std::is_same<T1, half>::value)
+        {
+            if constexpr(std::is_same<T2, float>::value)
+            {
+                return __half2float(x);
+            }
+            if constexpr(std::is_same<T2, double>::value)
+            {
+                return (double)(__half2float(x));
+            }
+        }
     }
 };
 
@@ -177,6 +277,10 @@ T2 * d_to_u(T1 * d_in, const size_t n)
 
     return d_out;
 }
+
+
+
+
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

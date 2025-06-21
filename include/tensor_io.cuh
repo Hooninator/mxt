@@ -17,10 +17,11 @@ void parse_frostt_line(std::string& line, Index_t& idx, Value_t& val)
     for (uint32_t i=0; i<Order; i++)
     {
         epos = line.find_first_of(' ', spos);
-        idx[i] = std::stoul(line.substr(spos, (epos - spos)));
-        spos = epos;
+        idx[i] = std::stoul(line.substr(spos, (epos - spos))) - 1; // 1-indexing
+        spos = epos+1;
     }
-    val = static_cast<Value_t>(std::stod(line.substr(epos - spos)));
+    epos = line.size();
+    val = static_cast<Value_t>(std::stod(line.substr(spos, epos - spos)));
 }
 
 

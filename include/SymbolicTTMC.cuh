@@ -70,12 +70,20 @@ struct SymbolicTTMC
             for (size_t i=0; i < Modes[n]; i++)
             {
                 d_Y_n_inds.h2d_cpy(h_Y_n_inds[n][i].data(), h_Y_n_inds[n][i].size(), offset);
-                offset += Modes[n];
+                offset += h_Y_n_inds[n][i].size();
             }
         }
 
         delete[] h_inds;
 
+    }
+
+
+    void dump(std::ofstream& ofs)
+    {
+        d_Y_n_inds.dump(ofs, "!!!Indices!!!");
+        d_Y_n_offsets.dump(ofs, "!!!Offsets!!!");
+        d_Y_mode_offsets.dump(ofs, "!!!Mode Offsets!!!");
     }
 
     DeviceWorkspace<size_t> d_Y_n_inds;

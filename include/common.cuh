@@ -19,9 +19,13 @@
 #include <unistd.h>
 
 #include <cuda.h>
+#include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cusparse.h>
 #include <cusolverDn.h>
+
+#define DEBUG 2
+#define DEBUG_SPTTMC_KERNEL 1
 
 #endif

@@ -16,7 +16,7 @@ std::random_device rd;
 std::mt19937 gen(rd());
 
 template <typename ValueType, typename IndexType>
-void randn_buffer(ValueType * d_data, IndexType n)
+void randn_buffer(ValueType ** d_data, IndexType n)
 {
 
     std::normal_distribution distr{0.0, 1.0};
@@ -24,7 +24,9 @@ void randn_buffer(ValueType * d_data, IndexType n)
     std::vector<ValueType> h_data(n);
     std::generate(h_data.begin(), h_data.end(), [&](){return distr(gen);});
 
-    utils::h2d_cpy(d_data, h_data.data(), h_data.size());
+    CUDA_CHECK(cudaMalloc(d_data, sizeof(ValueType) * n));
+
+    utils::h2d_cpy(*d_data, h_data.data(), h_data.size());
 }
 
 
