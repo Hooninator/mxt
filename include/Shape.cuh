@@ -18,14 +18,15 @@ struct RemoveOneToShape<Exclude, Shape<Dims...>>
 {
     static constexpr std::size_t N = sizeof...(Dims);
     static constexpr std::array<std::size_t, N> Arr = {Dims...};
+    static constexpr bool IgnoreRemove = (Exclude == N); 
 
     template <std::size_t... Is>
-    static constexpr Shape<(Arr[Is < Exclude ? Is : Is + 1])...> filter(std::index_sequence<Is...>)
+    static constexpr Shape<(IgnoreRemove ? Arr[Is] : Arr[Is < Exclude ? Is : Is + 1])...> filter(std::index_sequence<Is...>)
     {
         return {};
     }
 
-    using type = decltype(filter(std::make_index_sequence<N - 1>{}));
+    using type = decltype(filter(std::make_index_sequence<IgnoreRemove ? N : N - 1>{}));
 };
 
 

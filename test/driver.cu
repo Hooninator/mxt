@@ -35,10 +35,10 @@ void run_tensor(std::string& path)
 }
 
 
-using NipsTns = Config<Shape<2482, 2862, 14036, 17>, 
-                        Shape<10, 10, 10, 10>,
-                        double, __half, float,
-                        uint64_t>;
+//using NipsTns = Config<Shape<2482, 2862, 14036, 17>, 
+//                        Shape<10, 10, 10, 10>,
+//                        double, __half, float,
+//                        uint64_t>;
 
 using Randn5Tns = Config<Shape<10, 20, 10, 5, 10>, 
                         Shape<5, 3, 3, 2, 5>,
@@ -52,7 +52,7 @@ using Randn4Tns = Config<Shape<10, 20, 20, 10>,
 
 using Randn3Tns = Config<Shape<10, 20, 10>, 
                         Shape<5, 3, 3>,
-                        double, __half, float,
+                        double, double, double,
                         uint64_t>;
 
 
@@ -69,7 +69,7 @@ int main(int argc, char ** argv)
 
     if (tensor.compare("nips")==0)
     {
-        run_tensor<NipsTns>(path);
+        //run_tensor<NipsTns>(path);
     }
     else if (tensor.compare("randn3")==0)
     {

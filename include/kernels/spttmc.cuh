@@ -9,6 +9,9 @@
 namespace mxt
 {
 
+namespace kernels
+{
+
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2, auto R3>
 __device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out)
 {
@@ -226,6 +229,31 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
 }
 
 
+template <typename ValueTypeIn, uint32_t Order, uint32_t Mode>
+ValueTypeIn ** prune_matrices(ValueTypeIn ** d_matrices)
+{
+    static constexpr uint32_t Length = (Order == Mode) ? Order : Order - 1;
+
+    ValueTypeIn * h_active_matrices[Length];
+    ValueTypeIn ** d_active_matrices;
+
+    CUDA_CHECK(cudaMalloc(&d_active_matrices, sizeof(ValueTypeIn *) * (Length)));
+
+    size_t back = 0;
+    for (uint32_t n = 0; n < Order; n++)
+    {
+        if (n != Mode)
+        {
+            h_active_matrices[back++] = d_matrices[n];
+        }
+    }
+
+    CUDA_CHECK(cudaMemcpy(d_active_matrices, h_active_matrices, sizeof(ValueTypeIn *) * Length, cudaMemcpyHostToDevice));
+
+    return d_active_matrices;
+}
+
+
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, uint32_t Mode, typename MatNRowsShape, typename MatNColsShape>
 void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, const size_t nnz)
 {
@@ -240,8 +268,6 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
     static constexpr IndexType ActiveColProduct = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 1, std::multiplies<IndexType>{});
     static constexpr IndexType RowSum = std::reduce(MatNRows.begin(), MatNRows.end(), 0);
     static constexpr IndexType ActiveColSum = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 0);
-
-    DEBUG_PRINT("ActiveColProduct: %lu", ActiveColProduct);
 
     const IndexType I = MatNRows[Mode];
 
@@ -260,18 +286,7 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
     static constexpr size_t Smem = MaxSmem / 2;
 
     /* Remove excluded matrix from the list of matrices passed to the kernel */
-    ValueTypeIn * h_active_matrices[Order - 1];
-    ValueTypeIn ** d_active_matrices;
-    CUDA_CHECK(cudaMalloc(&d_active_matrices, sizeof(ValueTypeIn *) * (Order - 1)));
-    size_t back = 0;
-    for (uint32_t n = 0; n < Order; n++)
-    {
-        if (n != Mode)
-        {
-            h_active_matrices[back++] = d_matrices[n];
-        }
-    }
-    CUDA_CHECK(cudaMemcpy(d_active_matrices, h_active_matrices, sizeof(ValueTypeIn *) * (Order - 1), cudaMemcpyHostToDevice));
+    ValueTypeIn ** d_active_matrices = prune_matrices<ValueTypeIn, Order, Mode>(d_matrices);
 
     /* Call the kernel */
     spttmc_kernel_v1<ValueTypeIn, ValueTypeOut, IndexType, Index, Smem, Order, Mode, ActiveMatNColsShape, ActiveColProduct, ActiveColSum>
@@ -312,6 +327,7 @@ void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, Sym
     }
 }
 
+} //kernels
 } //mxt
 
 #endif

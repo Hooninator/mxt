@@ -4,6 +4,8 @@
 
 #include "common.cuh"
 
+#define MAX_SMEM 164 * 1024 //TODO: Condition this on GPU type
+
 
 #if DEBUG_SPTTMC_KERNEL > 0
 #define SPTTMC_PRINT_T0(msg, ...) \
@@ -95,6 +97,7 @@ T2 convert(T1 x)
         }
     }
 }
+
 
 
 } //kernel_utils

@@ -151,78 +151,6 @@ T * h2d_cpy(std::vector<T> h_arr)
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *               PRINTING AND IO 
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-*/
-
-template <typename T, typename... Args>
-void print_h_vec(std::vector<T>& vec, const char * prefix, Args... args)
-{
-    print_h_arr(vec.data(), vec.size(), prefix, args...);
-}
-
-
-template <typename T, typename... Args>
-void print_h_arr(T * h_arr, size_t n, const char * prefix, Args... args)
-{
-    std::printf(prefix, args...);
-    std::printf("\n");
-    for (size_t i=0; i<n; i++)
-    {
-        std::cout<<h_arr[i]<<'\n';
-    }
-    std::flush(std::cout);
-}
-
-
-template <typename T, typename... Args>
-void print_d_arr(T * d_arr, size_t n, const char * prefix, Args... args)
-{
-    T * h_arr = d2h_cpy(d_arr, n);
-    print_h_arr(h_arr, n, prefix, args...);
-    delete[] h_arr;
-}
-
-
-inline void print_separator(const char * s)
-{
-    std::cout<<"====================="<<s<<"====================="<<std::endl;
-    std::cout<<std::endl;
-}
-
-
-template <typename T>
-void write_h_arr(std::ofstream& ofs, T * h_arr, size_t n, const char * prefix)
-{
-    ofs<<prefix<<"\n";
-    for (int i=0; i<n; i++)
-    {
-        ofs<<h_arr[i]<<'\n';
-    }
-    std::flush(ofs);
-}
-
-
-template <typename T>
-void write_d_arr(std::ofstream& ofs, T * d_arr, size_t n, const char * prefix)
-{
-    T * h_arr = d2h_cpy(d_arr, n);
-    write_h_arr(ofs, h_arr, n, prefix);
-    delete[] h_arr;
-}
-
-
-inline void debug_print_separator(const char * s)
-{
-#if DEBUG >= 1
-    print_separator(s);
-#endif
-}
-
-
-/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  *               PRECISION 
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -295,6 +223,89 @@ void d_to_u(T1 * d_in, T2 * d_out, const size_t n)
     auto d_in_ptr = thrust::device_pointer_cast<T1>(d_in);
     auto d_out_ptr = thrust::device_pointer_cast<T2>(d_out);
     thrust::transform(d_in_ptr, d_in_ptr + n, d_out_ptr, round_functor<T1, T2>{});
+}
+
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *               PRINTING AND IO 
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+template <typename T, typename... Args>
+void print_h_vec(std::vector<T>& vec, const char * prefix, Args... args)
+{
+    print_h_arr(vec.data(), vec.size(), prefix, args...);
+}
+
+
+template <typename T, typename... Args>
+void print_h_arr(T * h_arr, size_t n, const char * prefix, Args... args)
+{
+    std::printf(prefix, args...);
+    std::printf("\n");
+    for (size_t i=0; i<n; i++)
+    {
+        std::cout<<h_arr[i]<<'\n';
+    }
+    std::flush(std::cout);
+}
+
+
+template <typename T, typename... Args>
+void print_d_arr(T * d_arr, size_t n, const char * prefix, Args... args)
+{
+    T * h_arr = d2h_cpy(d_arr, n);
+    print_h_arr(h_arr, n, prefix, args...);
+    delete[] h_arr;
+}
+
+
+inline void print_separator(const char * s)
+{
+    std::cout<<"====================="<<s<<"====================="<<std::endl;
+    std::cout<<std::endl;
+}
+
+
+template <typename T>
+void write_h_arr(std::ofstream& ofs, T * h_arr, size_t n, const char * prefix)
+{
+    ofs<<prefix<<"\n";
+    for (int i=0; i<n; i++)
+    {
+        ofs<<h_arr[i]<<'\n';
+    }
+    std::flush(ofs);
+}
+
+
+template <typename T>
+void write_d_arr(std::ofstream& ofs, T * d_arr, size_t n, const char * prefix)
+{
+    T * h_arr = d2h_cpy(d_arr, n);
+    write_h_arr(ofs, h_arr, n, prefix);
+    delete[] h_arr;
+}
+
+
+// Specialize for half
+void write_d_arr(std::ofstream& ofs, __half * d_arr, size_t n, const char * prefix)
+{
+    float * d_tmp = d_to_u<__half, float>(d_arr, n);
+    float * h_arr = d2h_cpy(d_tmp, n);
+    write_h_arr(ofs, h_arr, n, prefix);
+    delete[] h_arr;
+    CUDA_FREE(d_tmp);
+}
+
+
+inline void debug_print_separator(const char * s)
+{
+#if DEBUG >= 1
+    print_separator(s);
+#endif
 }
 
 
