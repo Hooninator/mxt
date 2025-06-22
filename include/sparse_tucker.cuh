@@ -65,6 +65,7 @@ struct TuckerTensor
     void form_core(SparseTensor_t& X)
     {
         /* TTM chain involving X and U^T[1...N] */
+
     }
 
 
@@ -150,8 +151,7 @@ TuckerTensor<SparseTensor_t, TuckerShape, Ttmc_u> mixed_sparse_hooi(SparseTensor
             DEBUG_PRINT("Mode %u ttmc done", n);
 
             /* Update U[n] with truncated SVD */
-            linalg::llsv_randsvd<Lra_u, Ttmc_u, IndexType_t, 10, 2>(handle, d_Y_n, d_U_list[n], InputModes[n], (Rn / TuckerRanks[n]), TuckerRanks[n]);
-
+            linalg::llsv_randsvd_cusolver<Lra_u, Ttmc_u, IndexType_t, 5, 2>(handle, d_Y_n, d_U_list[n], InputModes[n], (Rn / TuckerRanks[n]), TuckerRanks[n]);
             DEBUG_PRINT("Mode %u llsv done", n);
         }
 

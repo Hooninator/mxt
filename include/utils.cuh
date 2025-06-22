@@ -77,8 +77,8 @@
 #define CUSOLVER_CHECK(call) do {                                    \
     cusolverStatus_t err = call;                                     \
     if (err != CUSOLVER_STATUS_SUCCESS) {                            \
-        fprintf(stderr, "cuSolver error in file '%s' in line %i.\n", \
-                __FILE__, __LINE__);    \
+        fprintf(stderr, "cuSolver error %d in file '%s' in line %i.\n", \
+                err, __FILE__, __LINE__);    \
         exit(EXIT_FAILURE);                                          \
     }                                                                \
 } while(0)

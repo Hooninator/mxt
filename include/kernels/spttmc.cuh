@@ -237,9 +237,6 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
     static constexpr Index MatNRows = MatNRowsShape::dims;
     static constexpr Index MatNCols = MatNColsShape::dims;
 
-    utils::print_h_arr(MatNRows.data(), Order, "MatNRows");
-    utils::print_h_arr(MatNCols.data(), Order, "MatNCols");
-
     static constexpr IndexType ActiveColProduct = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 1, std::multiplies<IndexType>{});
     static constexpr IndexType RowSum = std::reduce(MatNRows.begin(), MatNRows.end(), 0);
     static constexpr IndexType ActiveColSum = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 0);
