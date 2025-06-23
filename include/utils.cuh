@@ -64,6 +64,16 @@
 }
 
 
+#define CUBLAS_CHECK(call) do {                                    \
+    cublasStatus_t err = call;                                     \
+    if (err != CUBLAS_STATUS_SUCCESS) {                            \
+        fprintf(stderr, "cuBLAS error in file '%s' in line %i : %d.\n", \
+                __FILE__, __LINE__, err);    \
+        exit(EXIT_FAILURE);                                          \
+    }                                                                \
+} while(0)
+
+
 #define CUSPARSE_CHECK(call) do {                                    \
     cusparseStatus_t err = call;                                     \
     if (err != CUSPARSE_STATUS_SUCCESS) {                            \
@@ -98,10 +108,6 @@ namespace mxt
 namespace utils
 {
 
-
-#if DEBUG >= 2
-std::ofstream logfile;
-#endif
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -353,6 +359,19 @@ inline constexpr cudaDataType to_cuda_dtype()
     }
 }
 
+
+template <typename I>
+inline constexpr cusparseIndexType_t to_cusparse_idx()
+{
+    if constexpr(std::is_same<I, uint64_t>::value)
+    {
+        return CUSPARSE_INDEX_64I;
+    }
+    else if constexpr(std::is_same<I, uint32_t>::value)
+    {
+        return CUSPARSE_INDEX_32I;
+    }
+}
 
     
 

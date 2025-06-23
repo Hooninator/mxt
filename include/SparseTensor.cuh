@@ -10,12 +10,13 @@ namespace mxt
 {
 
 
-template <typename VT, typename IT, uint32_t _Order, typename Shape>
+template <typename VT, typename VTL, typename IT, uint32_t _Order, typename Shape>
 class SparseTensor
 {
 public:
 
     using ValueType_t = VT;
+    using ValueTypeLow_t = VTL;
     using IndexType_t = IT;
 
     static constexpr uint32_t Order = _Order;
@@ -29,11 +30,83 @@ public:
     SparseTensor(){}
 
     SparseTensor(std::vector<Index_t>& inds, std::vector<ValueType_t>& vals):
-        nnz(inds.size()), 
-        d_vals(utils::h2d_cpy(vals)),
-        d_inds(utils::h2d_cpy(inds))
+        nnz(inds.size())
     {
         ASSERT( (inds.size() == vals.size()), "Number of indices %zu is not equal to number of nonzeros %zu", inds.size(), vals.size() ); 
+
+        sort_inds_vals(std::move(inds), std::move(vals));
+        d_inds = utils::h2d_cpy(inds);
+        d_vals = utils::h2d_cpy(vals);
+        d_vals_low = utils::d_to_u<ValueType_t, ValueTypeLow_t>(d_vals, nnz);
+    }
+
+
+    void sort_inds_vals(std::vector<Index_t>&& inds, std::vector<ValueType_t>&& vals)
+    {
+        std::vector<IndexType_t> sort_inds(nnz);
+        std::iota(sort_inds.begin(), sort_inds.end(), 0);
+
+        std::sort(sort_inds.begin(), sort_inds.end(), [&](auto i, auto k) {return std::lexicographical_compare(inds[i].begin(), inds[i].end(), inds[k].begin(), inds[k].end());});
+
+        std::vector<Index_t> sorted_inds(nnz);
+        std::vector<ValueType_t> sorted_vals(nnz);
+
+        for (size_t i = 0; i<nnz; i++)
+        {
+            sorted_inds[i] = inds[sort_inds[i]];
+            sorted_vals[i] = vals[sort_inds[i]];
+        }
+
+        inds = std::move(sorted_inds);
+        vals = std::move(sorted_vals);
+    }
+
+
+    void make_unfolding0_csr(std::vector<Index_t>& inds, std::vector<ValueType_t>& vals)
+    {
+        static constexpr IndexType_t M = Modes[0];
+
+        std::vector<IndexType_t> colinds(nnz);
+        std::vector<IndexType_t> rowptrs(M + 1, 0);
+
+        for (size_t i = 0; i<nnz; i++)
+        {
+            rowptrs[inds[i][0] + 1]++;
+            colinds[i] = colidx(inds[i]);
+        }
+
+        std::inclusive_scan(rowptrs.begin() + 1, rowptrs.end(), rowptrs.begin() + 1);
+
+        d_colinds = utils::h2d_cpy(colinds);
+        d_rowptrs = utils::h2d_cpy(rowptrs);
+
+        CUSPARSE_CHECK(cusparseCreateCsr(&cusparse_descr,
+                                         Modes[0], unfolding_cols<0>(), nnz, 
+                                         d_rowptrs, d_colinds, d_vals,
+                                         utils::to_cusparse_idx<IndexType_t>(),
+                                         utils::to_cusparse_idx<IndexType_t>(),
+                                         CUSPARSE_INDEX_BASE_ZERO,
+                                         utils::to_cuda_dtype<ValueType_t>()));
+    }
+
+
+    IndexType_t colidx(Index_t& idx)
+    {
+        IndexType_t result = 1;
+        IndexType_t offset = 1;
+        for (size_t n = 1; n < Order; n++)
+        {
+            result += Modes[n] * offset;
+            offset *= Modes[n];
+        }
+        return result;
+    }
+
+
+    template <uint32_t Mode>
+    constexpr inline IndexType_t unfolding_cols()
+    {
+        return std::reduce(Modes.begin(), Modes.end(), 1, std::multiplies<IndexType_t>{}) / Modes[Mode];
     }
 
 
@@ -71,15 +144,31 @@ public:
     }
 
 
+    ~SparseTensor()
+    {
+        CUDA_FREE(d_vals);
+        CUDA_FREE(d_inds);
+        CUDA_FREE(d_vals_low);
+    }
+
+
     inline ValueType_t * get_d_vals() {return d_vals;}
+    inline ValueTypeLow_t * get_d_vals_low() {return d_vals_low;}
     inline Index_t * get_d_inds() {return d_inds;}
+    inline IndexType_t * get_d_colinds() {return d_colinds;}
+    inline IndexType_t * get_d_rowptrs() {return d_rowptrs;}
     inline size_t get_nnz() const {return nnz;}
+    inline cusparseSpMatDescr_t get_cusparse_descr() { return cusparse_descr; }
 
 
 private:
 
     ValueType_t * d_vals;
+    ValueTypeLow_t * d_vals_low;
     Index_t * d_inds;
+    IndexType_t * d_colinds;
+    IndexType_t * d_rowptrs;
+    cusparseSpMatDescr_t cusparse_descr;
 
     size_t nnz;
 

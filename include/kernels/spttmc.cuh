@@ -162,7 +162,7 @@ __device__ void scaled_block_kprod(ValueTypeIn val, IndexType * r_inds, ValueTyp
 
 
 //TODO: Replace parameters with struct
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, size_t Smem, uint32_t Order, uint32_t Mode, typename MatNCols, size_t ActiveColProduct, size_t ActiveColSum>
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, size_t Smem, uint32_t Order, uint32_t Mode, typename MatNCols, size_t OutputNCols, size_t ActiveColSum>
 __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, size_t * d_Y_n_inds, size_t * d_Y_n_offsets, size_t * d_Y_mode_offsets, ValueTypeOut * d_out, const size_t nnz)
 {
     const uint32_t bid = blockIdx.x;
@@ -170,15 +170,14 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
     const uint32_t lid = kernel_utils::lid();
     const uint32_t wid = kernel_utils::wid();
 
-    //__shared__ char smem[Smem];
-
-    __shared__ ValueTypeOut s_d_Y_row[ActiveColProduct];
-    SPTTMC_PRINT_T0("ActiveColProduct: %lu", ActiveColProduct);
+    __shared__ ValueTypeOut s_d_Y_row[OutputNCols];
     __shared__ ValueTypeIn s_d_matrix_rows[ActiveColSum];
 
-    for (size_t i=threadIdx.x; i < ActiveColProduct; i += blockDim.x)
+    SPTTMC_PRINT_T0("OutputNCols: %lu", OutputNCols);
+
+    for (size_t i=threadIdx.x; i < OutputNCols; i += blockDim.x)
     {
-        if (i < ActiveColProduct)
+        if (i < OutputNCols)
             s_d_Y_row[i] = ValueTypeIn(0);
     }
 
@@ -188,15 +187,18 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
     size_t start_index = d_Y_n_offsets[ d_Y_mode_offsets[Mode] + bid ];
     size_t end_index = d_Y_n_offsets[ d_Y_mode_offsets[Mode] + (bid + 1) ];
 
-    IndexType r_inds[Order - 1];
+    IndexType r_inds[Order-1];
     ValueTypeIn val;
     IndexType idx;
 
+    //TODO: It would be better if we could just read in one index and use arithmetic to figure out what the entries of r_inds should be
+    //I think we can use r for this purpose
     SPTTMC_PRINT_T0("Beginning kprod, start index %lu, end index %lu", start_index, end_index);
     for (size_t r = start_index; r < end_index; r += 1)
     {
         idx = d_Y_n_inds[r];
         val = d_vals[idx];
+
         uint32_t o2 = 0;
         for (uint32_t o1 = 0; o1 < Order; o1++)
         {
@@ -205,8 +207,7 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
             r_inds[o2++] = d_inds[idx][o1]; //TODO: warp shuffle?
         }
 
-
-        /* Compute the scaled kronecker product of Order - 1 rows of the factor matrices */
+        /* Compute the scaled kronecker product of Order - 1 rows of the factor matrices if exclude, otherwise Order rows */
         scaled_block_kprod<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, MatNCols>
             (val, r_inds, d_matrices, s_d_Y_row, s_d_matrix_rows);
 
@@ -216,11 +217,11 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
     __syncthreads();
 
     /* Write the result to global memory */
-    for (size_t i=threadIdx.x; i < ActiveColProduct; i += blockDim.x)
+    for (size_t i=threadIdx.x; i < OutputNCols; i += blockDim.x)
     {
-        if (i < ActiveColProduct)
+        if (i < OutputNCols)
         {
-            d_out[i + bid * ActiveColProduct] = s_d_Y_row[i];
+            d_out[i + bid * OutputNCols] = s_d_Y_row[i];
         }
     }
 
@@ -232,12 +233,10 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
 template <typename ValueTypeIn, uint32_t Order, uint32_t Mode>
 ValueTypeIn ** prune_matrices(ValueTypeIn ** d_matrices)
 {
-    static constexpr uint32_t Length = (Order == Mode) ? Order : Order - 1;
-
-    ValueTypeIn * h_active_matrices[Length];
+    ValueTypeIn * h_active_matrices[Order];
     ValueTypeIn ** d_active_matrices;
 
-    CUDA_CHECK(cudaMalloc(&d_active_matrices, sizeof(ValueTypeIn *) * (Length)));
+    CUDA_CHECK(cudaMalloc(&d_active_matrices, sizeof(ValueTypeIn *) * (Order)));
 
     size_t back = 0;
     for (uint32_t n = 0; n < Order; n++)
@@ -248,7 +247,7 @@ ValueTypeIn ** prune_matrices(ValueTypeIn ** d_matrices)
         }
     }
 
-    CUDA_CHECK(cudaMemcpy(d_active_matrices, h_active_matrices, sizeof(ValueTypeIn *) * Length, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_active_matrices, h_active_matrices, sizeof(ValueTypeIn *) * Order, cudaMemcpyHostToDevice));
 
     return d_active_matrices;
 }
@@ -257,30 +256,31 @@ ValueTypeIn ** prune_matrices(ValueTypeIn ** d_matrices)
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, uint32_t Mode, typename MatNRowsShape, typename MatNColsShape>
 void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, const size_t nnz)
 {
-    /* Remove the specified mode from the arrays of matrix columns */
-    using ActiveMatNColsShape = RemoveOneToShape<Mode, MatNColsShape>::type;
+    /* Remove the specified mode from the arrays of matrix columns, if Exclude==true */
+    using ActiveMatNColsShape = AdjustShape<Mode, MatNColsShape>::type;
+    using ActiveMatNRowsShape = AdjustShape<Mode, MatNRowsShape>::type;
 
     static constexpr auto ActiveMatNCols = ActiveMatNColsShape::dims;
+    static constexpr auto ActiveMatNRows = ActiveMatNRowsShape::dims;
 
     static constexpr Index MatNRows = MatNRowsShape::dims;
     static constexpr Index MatNCols = MatNColsShape::dims;
 
-    static constexpr IndexType ActiveColProduct = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 1, std::multiplies<IndexType>{});
-    static constexpr IndexType RowSum = std::reduce(MatNRows.begin(), MatNRows.end(), 0);
-    static constexpr IndexType ActiveColSum = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 0);
+    static constexpr size_t OutputNCols = std::reduce(MatNCols.begin(), MatNCols.end(), 1, std::multiplies<IndexType>{}) / MatNCols[Mode];
+    static constexpr size_t ActiveColSum = std::reduce(ActiveMatNCols.begin(), ActiveMatNCols.end(), 0);
 
-    const IndexType I = MatNRows[Mode];
+    const IndexType OutputNRows = MatNRows[Mode];
 
     /* Grid configuration */
     //TODO: Replace this with the scheduler thing
-    const uint32_t nblocks = static_cast<uint32_t>(I);
+    const uint32_t nblocks = static_cast<uint32_t>(OutputNRows);
     static constexpr uint32_t tpb = 1024;
 
     /* Shared memory */
     //TODO: Make this portable between different kinds of GPUs
     static constexpr size_t MaxSmem = 164 * 1024;
 
-    static_assert( ActiveColProduct * sizeof(ValueTypeIn) + RowSum * sizeof(ValueTypeIn) <= MaxSmem );
+    static_assert( OutputNCols * sizeof(ValueTypeIn) + ActiveColSum * sizeof(ValueTypeIn) <= MaxSmem );
 
     // This should be enough for two blocks per SM, which will maximize occupancy
     static constexpr size_t Smem = MaxSmem / 2;
@@ -289,42 +289,26 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
     ValueTypeIn ** d_active_matrices = prune_matrices<ValueTypeIn, Order, Mode>(d_matrices);
 
     /* Call the kernel */
-    spttmc_kernel_v1<ValueTypeIn, ValueTypeOut, IndexType, Index, Smem, Order, Mode, ActiveMatNColsShape, ActiveColProduct, ActiveColSum>
+    spttmc_kernel_v1<ValueTypeIn, ValueTypeOut, IndexType, Index, Smem, Order, Mode, ActiveMatNColsShape, OutputNCols, ActiveColSum>
         <<<nblocks, tpb>>>
-        (d_vals, d_inds, d_active_matrices, symb.d_Y_n_inds.d_data, symb.d_Y_n_offsets.d_data, symb.d_Y_mode_offsets.d_data, d_out, nnz);
+        (d_vals, d_inds, 
+         d_active_matrices, 
+         symb.d_Y_n_inds.d_data, 
+         symb.d_Y_n_offsets.d_data, 
+         symb.d_Y_mode_offsets.d_data, 
+         d_out, nnz);
     CUDA_CHECK(cudaDeviceSynchronize());
     CUDA_FREE(d_active_matrices); // Does not free the actual matrices, only the array that holds the pointers to them
 }
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, typename MatNRowsShape, typename MatNColsShape>
-void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, const size_t nnz, const uint32_t mode)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, typename MatNRowsShape, typename MatNColsShape, uint32_t Mode>
+void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, const size_t nnz)
 {
-    switch(mode)
-    {
-        case 0:
-            spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, 0, MatNRowsShape, MatNColsShape>
-                (d_vals, d_inds, d_matrices, symb, d_out, nnz);
-            break;
-        case 1:
-            spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, 1, MatNRowsShape, MatNColsShape>
-                (d_vals, d_inds, d_matrices, symb, d_out, nnz);
-            break;
-        case 2:
-            spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, 2, MatNRowsShape, MatNColsShape>
-                (d_vals, d_inds, d_matrices, symb, d_out, nnz);
-            break;
-        case 3:
-            spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, 3, MatNRowsShape, MatNColsShape>
-                (d_vals, d_inds, d_matrices, symb, d_out, nnz);
-            break;
-        case 4:
-            spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, 4, MatNRowsShape, MatNColsShape>
-                (d_vals, d_inds, d_matrices, symb, d_out, nnz);
-            break;
-        default:
-            NOT_REACHABLE();
-    }
+
+    spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, Mode, MatNRowsShape, MatNColsShape>
+        (d_vals, d_inds, d_matrices, symb, d_out, nnz);
+
 }
 
 } //kernels

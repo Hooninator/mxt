@@ -58,7 +58,6 @@ struct SymbolicTTMC
         d_Y_n_offsets.alloc(ModeSum + 1);
         d_Y_mode_offsets.alloc(Order);
 
-
         // Move to device
         d_Y_n_offsets.h2d_cpy(h_Y_n_offsets.data(), h_Y_n_offsets.size());
         d_Y_mode_offsets.h2d_cpy(mode_offsets.data(), mode_offsets.size());

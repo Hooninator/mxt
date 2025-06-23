@@ -25,7 +25,55 @@
 #include <cusparse.h>
 #include <cusolverDn.h>
 
-#define DEBUG 2
+#define DEBUG 1
 #define DEBUG_SPTTMC_KERNEL 0
+
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *              GLOBAL VARIABLES
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+namespace mxt
+{
+
+namespace globals
+{
+
+std::ofstream logfile;
+cusolverDnHandle_t cusolverdn_handle;
+cublasHandle_t cublas_handle;
+cusparseHandle_t cusparse_handle;
+
+} //globals
+
+void mxt_init()
+{
+
+#if DEBUG >= 2
+    globals::logfile.open("logfile.out");
+#endif
+
+    (cusolverDnCreate(&globals::cusolverdn_handle));
+    (cublasCreate(&globals::cublas_handle));
+    (cusparseCreate(&globals::cusparse_handle));
+}
+
+
+void mxt_finalize()
+{
+
+#if DEBUG >= 2
+    globals::logfile.close();
+#endif
+
+    (cusolverDnDestroy(globals::cusolverdn_handle));
+    (cublasDestroy(globals::cublas_handle));
+    (cusparseDestroy(globals::cusparse_handle));
+}
+
+} //mxt
 
 #endif

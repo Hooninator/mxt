@@ -3,6 +3,7 @@
 
 #include "common.cuh"
 #include "utils.cuh"
+#include "kernels/transpose.cuh"
 
 namespace mxt
 {
@@ -10,9 +11,16 @@ namespace linalg
 {
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, int P, int Iters>
-void llsv_randsvd_cusolver(cusolverDnHandle_t& handle, ValueTypeIn * d_A, ValueTypeOut * d_U, const IndexType m, const IndexType n, const IndexType k)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, size_t P, size_t Iters, size_t M, size_t N, size_t K>
+void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U)
 {
+    // Since the SpTTMc output is in row-major order but cusolver only accepts column major, 
+    // we treat d_A as transposed and compute the right singular vectors, 
+    // this should give us the left singular vectors of non-transposed d_A
+    size_t m = M;
+    size_t n = N;
+    size_t k = K;
+
     //TODO: Move these allocations
     ValueTypeIn * d_S;
     CUDA_CHECK(cudaMalloc(&d_S, sizeof(ValueTypeIn) * std::min(m, n)));
@@ -20,10 +28,10 @@ void llsv_randsvd_cusolver(cusolverDnHandle_t& handle, ValueTypeIn * d_A, ValueT
     ValueTypeIn * d_U_tmp;
     CUDA_CHECK(cudaMalloc(&d_U_tmp, sizeof(ValueTypeIn) * m * k));
 
-    ValueTypeIn * d_V_tmp; // I think this can remain uninitialized, since, we set jobv='N'
+    ValueTypeIn * d_V_tmp; // I think this can remain uninitialized, since we set jobu='N'
 
-    signed char jobu = 'S';
-    signed char jobv = 'N';
+    signed char jobu = 'N';
+    signed char jobv = 'S';
 
     size_t d_bytes = 0;
     size_t h_bytes = 0;
@@ -39,14 +47,14 @@ void llsv_randsvd_cusolver(cusolverDnHandle_t& handle, ValueTypeIn * d_A, ValueT
     CUDA_CHECK(cudaDeviceSynchronize());
 
     CUSOLVER_CHECK(cusolverDnXgesvdr_bufferSize(
-                    handle, params,
+                    globals::cusolverdn_handle, params,
                     jobu, jobv,
-                    m, n, k, std::min(n - k, (IndexType)P),
+                    n, m, k, 2,
                     Iters, 
-                    utils::to_cuda_dtype<ValueTypeIn>(), d_A, m,
+                    utils::to_cuda_dtype<ValueTypeIn>(), d_A, n,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_S,
-                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_tmp, m,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_V_tmp, n,
+                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_tmp, m,
                     utils::to_cuda_dtype<ValueTypeIn>(), &d_bytes, 
                     &h_bytes));
 
@@ -54,18 +62,19 @@ void llsv_randsvd_cusolver(cusolverDnHandle_t& handle, ValueTypeIn * d_A, ValueT
     h_workspace = (void*)(new char[h_bytes]);
 
     CUSOLVER_CHECK(cusolverDnXgesvdr(
-                    handle, params,
+                    globals::cusolverdn_handle, params,
                     jobu, jobv,
-                    m, n, k, std::min(n - k, (IndexType)P),
+                    n, m, k, 2,
                     Iters, 
-                    utils::to_cuda_dtype<ValueTypeIn>(), d_A, m,
+                    utils::to_cuda_dtype<ValueTypeIn>(), d_A, n,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_S,
-                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_tmp, m,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_V_tmp, n,
+                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_tmp, m,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_workspace, d_bytes, 
                     h_workspace, h_bytes, d_info));
 
-    utils::d_to_u(d_U_tmp, d_U, m * k);
+    // Convert the output to row-major order
+    kernels::transpose_outplace<ValueTypeIn, ValueTypeOut, M, K>(d_U_tmp, d_U);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     free(h_workspace);
