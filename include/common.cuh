@@ -25,7 +25,7 @@
 #include <cusparse.h>
 #include <cusolverDn.h>
 
-#define DEBUG 1
+#define DEBUG 2
 #define DEBUG_SPTTMC_KERNEL 0
 
 

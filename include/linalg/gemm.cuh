@@ -39,20 +39,21 @@ cublasComputeType_t get_compute_type()
 
 
 template <typename ValueTypeIn_t, typename ValueTypeOut_t, typename IndexType_t>
-void gemm(ValueTypeIn_t * d_Y, ValueTypeIn_t * d_U, ValueTypeOut_t * d_G, const IndexType_t m, const IndexType_t n, const IndexType_t k)
+void gemm(ValueTypeIn_t * d_A, ValueTypeIn_t * d_B, ValueTypeOut_t * d_C, const IndexType_t m, const IndexType_t n, const IndexType_t k, bool transA, bool transB)
 {
     ValueTypeIn_t alpha = 1.0;
     ValueTypeIn_t beta = 0.0;
     CUBLAS_CHECK(cublasGemmEx(globals::cublas_handle,
-                              CUBLAS_OP_N, CUBLAS_OP_N,
+                              (transA) ? CUBLAS_OP_T : CUBLAS_OP_N, 
+                              (transB) ? CUBLAS_OP_T : CUBLAS_OP_N,
                               m, n, k,
-                              &alpha, d_U,
+                              &alpha, d_A,
                               utils::to_cuda_dtype<ValueTypeIn_t>(),
-                              m,
-                              d_Y, utils::to_cuda_dtype<ValueTypeIn_t>(),
-                              k,
+                              (transA) ? k : m,
+                              d_B, utils::to_cuda_dtype<ValueTypeIn_t>(),
+                              (transB) ? n : k,
                               &beta,
-                              d_G, utils::to_cuda_dtype<ValueTypeOut_t>(), m,
+                              d_C, utils::to_cuda_dtype<ValueTypeOut_t>(), m,
                               get_compute_type<ValueTypeIn_t, ValueTypeOut_t>(),
                               CUBLAS_GEMM_DEFAULT));
 }

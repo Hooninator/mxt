@@ -11,8 +11,8 @@ namespace linalg
 {
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, size_t P, size_t Iters, size_t M, size_t N, size_t K>
-void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, size_t Iters, size_t M, size_t N, size_t K, bool KeepLra>
+void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d_U_lra)
 {
     // Since the SpTTMc output is in row-major order but cusolver only accepts column major, 
     // we treat d_A as transposed and compute the right singular vectors, 
@@ -24,9 +24,6 @@ void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U)
     //TODO: Move these allocations
     ValueTypeIn * d_S;
     CUDA_CHECK(cudaMalloc(&d_S, sizeof(ValueTypeIn) * std::min(m, n)));
-
-    ValueTypeIn * d_U_tmp;
-    CUDA_CHECK(cudaMalloc(&d_U_tmp, sizeof(ValueTypeIn) * m * k));
 
     ValueTypeIn * d_V_tmp; // I think this can remain uninitialized, since we set jobu='N'
 
@@ -54,7 +51,7 @@ void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U)
                     utils::to_cuda_dtype<ValueTypeIn>(), d_A, n,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_S,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_V_tmp, n,
-                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_tmp, m,
+                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_lra, m,
                     utils::to_cuda_dtype<ValueTypeIn>(), &d_bytes, 
                     &h_bytes));
 
@@ -69,20 +66,25 @@ void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U)
                     utils::to_cuda_dtype<ValueTypeIn>(), d_A, n,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_S,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_V_tmp, n,
-                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_tmp, m,
+                    utils::to_cuda_dtype<ValueTypeIn>(), d_U_lra, m,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_workspace, d_bytes, 
                     h_workspace, h_bytes, d_info));
 
-    // Convert the output to row-major order
-    kernels::transpose_outplace<ValueTypeIn, ValueTypeOut, M, K>(d_U_tmp, d_U);
+    // Convert the output to row-major order and change precisions
+    kernels::transpose_outplace<ValueTypeIn, ValueTypeOut, M, K>(d_U_lra, d_U);
     CUDA_CHECK(cudaDeviceSynchronize());
+
+    // If we want the output of the lra, convert the thing we just transposed to the right precision
+    if constexpr (KeepLra)
+    {
+        utils::d_to_u<ValueTypeOut, ValueTypeIn>(d_U, d_U_lra, m * k);
+    }
 
     free(h_workspace);
 
     CUDA_FREE(d_info);
     CUDA_FREE(d_workspace);
     CUDA_FREE(d_S);
-    CUDA_FREE(d_U_tmp);
 }
 
 
