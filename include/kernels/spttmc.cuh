@@ -69,9 +69,6 @@ __device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, Value
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
 
-    SPTTMC_PRINT_T0("R0: %lu, R1: %lu, R2: %lu", R0, R1, R2);
-    SPTTMC_PRINT_T0("%p", d_matrices[0]);
-
     if (wid == 0)
     {
         for (IndexType j = 0 + lid; j < R0; j+=warpSize)
@@ -178,7 +175,9 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
     for (size_t i=threadIdx.x; i < OutputNCols; i += blockDim.x)
     {
         if (i < OutputNCols)
+        {
             s_d_Y_row[i] = ValueTypeIn(0);
+        }
     }
 
     SPTTMC_PRINT_T0("Done with shared memory");
@@ -287,6 +286,8 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
 
     /* Remove excluded matrix from the list of matrices passed to the kernel */
     ValueTypeIn ** d_active_matrices = prune_matrices<ValueTypeIn, Order, Mode>(d_matrices);
+
+    DEBUG_PRINT("blocks: %u, threads: %u", nblocks, tpb);
 
     /* Call the kernel */
     spttmc_kernel_v1<ValueTypeIn, ValueTypeOut, IndexType, Index, Smem, Order, Mode, ActiveMatNColsShape, OutputNCols, ActiveColSum>

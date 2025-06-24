@@ -6,6 +6,7 @@
 #include "SymbolicTTMC.cuh"
 #include "utils.cuh"
 #include "DeviceWorkspace.cuh"
+#include "tensor_io.cuh"
 
 #include "rand/rand_matrix.cuh"
 #include "linalg/svd.cuh"
@@ -39,19 +40,23 @@ struct TuckerTensor
 
     static_assert( TuckerRanks.size() == Order );
 
-    TuckerTensor(const char * init)
+    TuckerTensor(const char * init, const char * factors_dir = nullptr)
     {
         core_formed = false;
-        init_factors(init);
+        init_factors(init, factors_dir);
     }
 
     
-    void init_factors(const char * init)
+    void init_factors(const char * init, const char * factors_dir)
     {
         std::string init_str(init);
         if (init_str.compare("randn")==0)
         {
             init_factors_randn();
+        }
+        else if (init_str.compare("file")==0)
+        {
+            init_factors_file(factors_dir);
         }
         else
         {
@@ -65,6 +70,17 @@ struct TuckerTensor
             CUSPARSE_CHECK(cusparseCreateDnMat(&factor_descrs[i], InputModes[i], TuckerRanks[i], TuckerRanks[i], 
                                                 factors[i], utils::to_cuda_dtype<FactorValueType_t>(),
                                                 CUSPARSE_ORDER_ROW));
+        }
+    }
+
+
+    void init_factors_file(const char * factors_dir)
+    {
+        factors.reserve(Order);
+        for (uint32_t i=0; i<Order; i++)
+        {
+            std::string path = std::string(factors_dir) + "factor_" + std::to_string(i) + ".tns";
+            factors[i] = io::read_matrix_frostt<FactorValueType_t>(path.c_str(), InputModes[i], TuckerRanks[i]);
         }
     }
 
@@ -121,6 +137,8 @@ struct TuckerTensor
             std::abort();
         }
 
+        DEBUG_PRINT("Rn: %lu", Rn);
+
         double * d_core_dbl = utils::d_to_u<CoreValueType_t, double>(d_core, Rn);
 
         double result;
@@ -151,7 +169,7 @@ struct TuckerTensor
 
 
 template <typename SparseTensor_t, typename CoreTensor_t, typename TuckerShape>
-TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(SparseTensor_t& X, const char * init, const size_t maxiters)
+TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(SparseTensor_t& X, const char * init, const size_t maxiters, const char * factors_dir = nullptr)
 {
 
     //TODO: These needs to be renamed
@@ -166,7 +184,7 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     static constexpr Index_t TuckerRanks = TuckerShape::dims;
     static constexpr Index_t InputModes = SparseTensor_t::Modes;
 
-    TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> X_tucker(init);
+    TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> X_tucker(init, factors_dir);
     std::vector<double> core_norms;
     TTMc_t * d_X_vals = X.get_d_vals_low();
 
@@ -195,8 +213,11 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     SymbolicTTMC symbolic_ttmc(X);
 
 #if DEBUG >= 2
-    X.dump(globals::logfile);
     symbolic_ttmc.dump(globals::logfile);
+    for (int i=0; i<N; i++)
+    {
+        utils::write_d_arr(globals::logfile, d_U_list[i], InputModes[i] * TuckerRanks[i], "Factor matrix");
+    }
 #endif
 
     utils::print_separator("Done symbolic");
@@ -225,6 +246,8 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
                                          (d_Y_n, d_U_list[Is], d_U_lrau)
          ), ...);
         }(std::make_index_sequence<N>{});
+
+        CUDA_CHECK(cudaDeviceSynchronize());
 
         /* Form core tensor */
         utils::print_separator("Forming core");

@@ -60,7 +60,7 @@ def reconstruct(G, U_list):
 
 
 def write_tensor(filename, X):
-    inds = np.array(torch.nonzero(X))
+    inds = np.array(torch.nonzero(X + 1))
     with open(filename, 'w') as file:
         for i in range(inds.shape[0]):
             indices = inds[i, :] + 1

@@ -46,7 +46,7 @@ void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * 
     CUSOLVER_CHECK(cusolverDnXgesvdr_bufferSize(
                     globals::cusolverdn_handle, params,
                     jobu, jobv,
-                    n, m, k, 2,
+                    n, m, k, 10,
                     Iters, 
                     utils::to_cuda_dtype<ValueTypeIn>(), d_A, n,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_S,
@@ -61,7 +61,7 @@ void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * 
     CUSOLVER_CHECK(cusolverDnXgesvdr(
                     globals::cusolverdn_handle, params,
                     jobu, jobv,
-                    n, m, k, 2,
+                    n, m, k, 10,
                     Iters, 
                     utils::to_cuda_dtype<ValueTypeIn>(), d_A, n,
                     utils::to_cuda_dtype<ValueTypeIn>(), d_S,

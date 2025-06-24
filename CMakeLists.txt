@@ -28,3 +28,4 @@ macro(add_test name)
 endmacro()
 
 add_test(driver)
+add_test(correctness)
