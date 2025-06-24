@@ -7,6 +7,7 @@ def main():
     parser.add_argument("--mode_sizes", type=int, nargs='+', required=True, help="Sizes of each mode (list of integers).")
     parser.add_argument("--nnz", type=int, required=True, help="Number of nonzero entries.")
     parser.add_argument("--output", type=str, required=True, help="Output filename (.tns format).")
+    parser.add_argument("--scaling", type=float, default=1.0)
 
     args = parser.parse_args()
 
@@ -23,8 +24,8 @@ def main():
     for i in range(order):
         indices[:, i] = np.random.randint(low=0, high=mode_sizes[i], size=nnz) + 1  # 1-based indexing
 
-    # Generate Gaussian values
-    values = np.random.randn(nnz)
+    # Generate Gaussian values multiplied by scaling factor
+    values = np.random.randn(nnz) * args.scaling
 
     # Write to file in FROSTT format
     with open(filename, "w") as f:
