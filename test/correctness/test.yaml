@@ -1,0 +1,19 @@
+configs:
+  3D_12031:
+    name: "3D_12031"
+    shape: [100, 80, 60]
+    ranks: [10, 8, 6]
+  kinetic:
+    name: "kinetic"
+    shape: [64, 12, 10, 60]
+    ranks: [20, 6, 5, 20]
+  randn5:
+    name: "randn5"
+    shape: [10, 20, 10, 5, 10]
+    ranks: [5, 3, 3, 2, 5]
+  randn4_scaled:
+    name: "randn4_scaled"
+    shape: [50, 50, 50, 50]
+    ranks: [25, 40, 10, 5]
+
+
