@@ -304,11 +304,17 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
 
 
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, typename MatNRowsShape, typename MatNColsShape, uint32_t Mode>
-void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, const size_t nnz)
+void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, ValueTypeOut * d_out_cpy, const size_t nnz)
 {
 
     spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, Mode, MatNRowsShape, MatNColsShape>
         (d_vals, d_inds, d_matrices, symb, d_out, nnz);
+
+    if constexpr (Mode == Order - 1)
+    {
+        static constexpr auto sz = std::reduce(MatNColsShape::dims.begin(), MatNColsShape::dims.end(), 1, std::multiplies<IndexType>{});
+        utils::d2d_cpy(d_out, d_out_cpy, (sz * MatNRowsShape::dims[Mode]) / MatNColsShape::dims[Mode]);
+    }
 
 }
 

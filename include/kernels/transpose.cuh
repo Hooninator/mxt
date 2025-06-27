@@ -13,7 +13,7 @@ namespace kernels
 template<typename T1, typename T2, size_t M, size_t N, size_t TileM, size_t TileN>
 __global__ void transpose_outplace_kernel(T1 * d_A, T2 * d_A_trans)
 {
-    __shared__ T1 tile[TileM][TileN + 1]; //avoid bank conflict
+    __shared__ T1 tile[TileM][TileN]; //TODO: avoid bank conflict?
     
     const uint32_t bx = blockIdx.x;
     const uint32_t by = blockIdx.y;
@@ -47,6 +47,7 @@ void transpose_outplace(T1 * d_A, T2 * d_A_trans)
     transpose_outplace_kernel<T1, T2, M, N, threadsx, threadsy>
         <<<dim3(blockx, blocky), dim3(threadsx, threadsy)>>>
         (d_A, d_A_trans);
+    CUDA_CHECK(cudaDeviceSynchronize());
 }
 
 } //kernels

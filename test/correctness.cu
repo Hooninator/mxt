@@ -1,6 +1,7 @@
 
 #include "mxt.cuh"
 #include "linalg/norms.cuh"
+#include "linalg/geam.cuh"
 
 #include <map>
 #include <string>
@@ -38,31 +39,55 @@ void run_correctness(std::string& path, std::string& tensorname)
     SparseTensor_t X = io::read_tensor_frostt<SparseTensor_t>(path.c_str());
     utils::print_separator("Done IO");
 
+
     std::string factors_dir = std::string(base);
     factors_dir.append(tensorname);
     factors_dir.append("/");
+
 
     utils::print_separator("Beginning Tucker");
     auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::TuckerRanks_t>(X, "file", 5, factors_dir.c_str());
     utils::print_separator("Done Tucker");
 
+
     /* Compare the core tensors */
+    static constexpr auto Rn = std::reduce(Conf::TuckerRanks_t::dims.begin(), Conf::TuckerRanks_t::dims.end(), 1, std::multiplies<size_t>{});
     std::string core_path = std::string(factors_dir);
-    core_path.append("core.tns");
+    core_path.append("core_final.tns");
     typename Conf::CoreTensorU_t * d_correct_core = io::read_dense_tensor_frostt<typename Conf::CoreTensorU_t, typename Conf::TuckerRanks_t>(core_path.c_str());
 
-    auto Rn = std::reduce(Conf::TuckerRanks_t::dims.begin(), Conf::TuckerRanks_t::dims.end(), 1, std::multiplies<size_t>{});
 
-    auto d_correct_ptr = thrust::device_pointer_cast(d_correct_core);
-    auto d_computed_ptr = thrust::device_pointer_cast(tucker_X.d_core);
+    typename Conf::CoreTensorU_t * d_correct_core_t;
+    CUDA_CHECK(cudaMalloc(&d_correct_core_t, sizeof(typename Conf::CoreTensorU_t) * Rn));
 
-    thrust::sort(d_correct_ptr, d_correct_ptr + Rn);
-    thrust::sort(d_computed_ptr, d_computed_ptr + Rn);
-    
-    auto err = linalg::relative_frob_norm(d_correct_core, tucker_X.d_core, Rn);
 
+    static constexpr auto R0 = Conf::TuckerRanks_t::dims[Conf::Order - 1];
+    linalg::geam(d_correct_core, d_correct_core_t, R0, Rn / R0);
+    utils::d2d_cpy(tucker_X.d_core, d_correct_core, Rn);
+
+
+    auto d_correct_core_ptr = thrust::device_pointer_cast(d_correct_core);
+    auto d_correct_core_t_ptr = thrust::device_pointer_cast(d_correct_core_t);
+
+
+    thrust::transform(d_correct_core_t_ptr, d_correct_core_t_ptr + Rn, d_correct_core_t_ptr, utils::abs_functor<typename Conf::CoreTensorU_t>{});
+    thrust::transform(d_correct_core_ptr, d_correct_core_ptr + Rn, d_correct_core_ptr, utils::abs_functor<typename Conf::CoreTensorU_t>{});
+
+
+    utils::write_d_arr(globals::logfile, d_correct_core_t, Rn, "correct_core_t");
+    utils::write_d_arr(globals::logfile, d_correct_core, Rn, "computed_core");
+
+
+    auto err = linalg::relative_frob_norm(d_correct_core_t, d_correct_core, Rn);
     std::cout<<"|| G_correct - G_computed||_F / ||G_correct||_F : "<<err<<std::endl;
 
+
+    //auto recon_err = tucker_X.reconstruction_error(X);
+    //std::cout<<"||X - X_tucker||_F / ||X||_F : "<<recon_err<<std::endl;
+
+
+    CUDA_FREE(d_correct_core_t);
+    CUDA_FREE(d_correct_core);
 }
 
 
@@ -85,6 +110,8 @@ using Randn4Scaled = Config<Shape<50, 50, 50, 50>,
                             Shape<25, 40, 10, 5>,
                             double, double, double, 
                             uint64_t>;
+
+using Small = Config<Shape<3, 3, 3>, Shape<2,2,2>, double, double, double, uint64_t>;
 
 
 int main(int argc, char ** argv)
@@ -117,6 +144,10 @@ int main(int argc, char ** argv)
     else if (tensor.compare("randn4_scaled")==0)
     {
         run_correctness<Randn4Scaled>(path, tensor);
+    }
+    else if (tensor.compare("small")==0)
+    {
+        run_correctness<Small>(path, tensor);
     }
     else
     {
