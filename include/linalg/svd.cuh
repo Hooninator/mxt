@@ -198,8 +198,8 @@ void llsv_jacobi_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d
 }
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, size_t M, size_t N, size_t K, bool KeepLra>
-void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d_U_lra)
+template <typename ValueTypeIn, typename ValueTypeCore, typename ValueTypeOut, typename IndexType, size_t M, size_t N, size_t K, bool KeepLra>
+void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeCore * d_U_core)
 {
     //TODO: if N > M, transpose
     constexpr bool transpose = (N > M);
@@ -212,7 +212,7 @@ void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d_U_
     if constexpr (transpose)
     {
         CUDA_CHECK(cudaMalloc(&d_A_t, sizeof(ValueTypeIn) * M * N));
-        linalg::geam<ValueTypeIn>(d_A, d_A_t, M, N);
+        linalg::transpose<ValueTypeIn, ValueTypeIn>(d_A, d_A_t, M, N);
         CUDA_CHECK(cudaDeviceSynchronize());
         d_A_active = d_A_t;
     }
@@ -277,8 +277,8 @@ void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d_U_
 
     if constexpr (transpose)
     {
-        utils::d_to_u<ValueTypeIn, ValueTypeIn>(d_U_tmp, d_U_lra, N * K);
-        linalg::geam<ValueTypeIn>(d_U_lra, d_U, N, K);
+        utils::d_to_u<ValueTypeIn, ValueTypeCore>(d_U_tmp, d_U_core, N * K);
+        linalg::transpose<ValueTypeCore, ValueTypeOut>(d_U_core, d_U, N, K);
     }
     else
     {
@@ -287,7 +287,7 @@ void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d_U_
 
     if constexpr (KeepLra)
     {
-        utils::d_to_u<ValueTypeOut, ValueTypeIn>(d_U, d_U_lra, N * K);
+        utils::d_to_u<ValueTypeOut, ValueTypeCore>(d_U, d_U_core, N * K);
     }
     CUDA_CHECK(cudaDeviceSynchronize());
 

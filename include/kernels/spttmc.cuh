@@ -303,8 +303,8 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
 }
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, typename MatNRowsShape, typename MatNColsShape, uint32_t Mode>
-void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, ValueTypeOut * d_out_cpy, const size_t nnz)
+template <typename ValueTypeIn, typename ValueTypeOut, typename ValueTypeCore, typename IndexType, typename Index, uint32_t Order, typename MatNRowsShape, typename MatNColsShape, uint32_t Mode>
+void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, SymbolicTTMC& symb, ValueTypeOut * d_out, ValueTypeCore * d_out_core, const size_t nnz)
 {
 
     spttmc_impl<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, Mode, MatNRowsShape, MatNColsShape>
@@ -313,7 +313,7 @@ void spttmc(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, Sym
     if constexpr (Mode == Order - 1)
     {
         static constexpr auto sz = std::reduce(MatNColsShape::dims.begin(), MatNColsShape::dims.end(), 1, std::multiplies<IndexType>{});
-        utils::d2d_cpy(d_out, d_out_cpy, (sz * MatNRowsShape::dims[Mode]) / MatNColsShape::dims[Mode]);
+        utils::d_to_u<ValueTypeOut, ValueTypeCore>(d_out, d_out_core, (sz * MatNRowsShape::dims[Mode]) / MatNColsShape::dims[Mode]);
     }
 
 }

@@ -6,7 +6,8 @@
 
 using namespace mxt;
 
-template <typename InputModes, typename TuckerRanks, typename HighU, typename LowU, typename CoreTensorU, typename Idx>
+
+template <typename InputModes, typename TuckerRanks, typename HighU, typename LowU, typename LraU, typename CoreTensorU, typename Idx>
 struct Config
 {
     using InputModes_t = InputModes;
@@ -14,11 +15,11 @@ struct Config
     using HighU_t = HighU;
     using LowU_t = LowU;
     using CoreTensorU_t = CoreTensorU;
+    using LraU_t = LraU;
     using Idx_t = Idx;
 
     static constexpr uint32_t Order = InputModes_t::dims.size();
 };
-
 
 template <typename Conf>
 void run_tensor(std::string& path)
@@ -30,29 +31,29 @@ void run_tensor(std::string& path)
     utils::print_separator("Done IO");
 
     utils::print_separator("Beginning Tucker");
-    auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
+    auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
     utils::print_separator("Done Tucker");
 }
 
 
 using NipsTns = Config<Shape<2482, 2862, 14036, 17>, 
                         Shape<10, 10, 10, 10>,
-                        double, __half, float, 
+                        double, __half, float, float,
                         uint64_t>;
 
 using Randn5Tns = Config<Shape<10, 20, 10, 5, 10>, 
                         Shape<5, 3, 3, 2, 5>,
-                        double, double, double,
+                        double, double, double,float,
                         uint64_t>;
 
 using Randn4Tns = Config<Shape<10, 20, 20, 10>, 
                         Shape<5, 3, 3, 2>,
-                        double, __half, float, 
+                        double, __half, float, float,
                         uint64_t>;
 
 using Randn3Tns = Config<Shape<10, 20, 10>, 
                         Shape<5, 3, 3>,
-                        double, __half, float, 
+                        double, __half, float, float,
                         uint64_t>;
 
 

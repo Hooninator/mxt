@@ -12,7 +12,7 @@
 
 using namespace mxt;
 
-template <typename InputModes, typename TuckerRanks, typename HighU, typename LowU, typename CoreTensorU, typename Idx>
+template <typename InputModes, typename TuckerRanks, typename HighU, typename LowU, typename LraU, typename CoreTensorU, typename Idx>
 struct Config
 {
     using InputModes_t = InputModes;
@@ -20,6 +20,7 @@ struct Config
     using HighU_t = HighU;
     using LowU_t = LowU;
     using CoreTensorU_t = CoreTensorU;
+    using LraU_t = LraU;
     using Idx_t = Idx;
 
     static constexpr uint32_t Order = InputModes_t::dims.size();
@@ -46,7 +47,7 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 
     utils::print_separator("Beginning Tucker");
-    auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::TuckerRanks_t>(X, "file", 5, factors_dir.c_str());
+    auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "file", 5, factors_dir.c_str());
     utils::print_separator("Done Tucker");
 
 
@@ -62,7 +63,7 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 
     static constexpr auto R0 = Conf::TuckerRanks_t::dims[Conf::Order - 1];
-    linalg::geam(d_correct_core, d_correct_core_t, R0, Rn / R0);
+    linalg::transpose(d_correct_core, d_correct_core_t, R0, Rn / R0);
     utils::d2d_cpy(tucker_X.d_core, d_correct_core, Rn);
 
 
@@ -78,11 +79,11 @@ void run_correctness(std::string& path, std::string& tensorname)
     utils::write_d_arr(globals::logfile, d_correct_core, Rn, "computed_core");
 
 
-    auto err = linalg::relative_frob_norm(d_correct_core_t, d_correct_core, Rn);
+    double err = linalg::relative_frob_norm(d_correct_core_t, d_correct_core, Rn);
     std::cout<<"|| G_correct - G_computed||_F / ||G_correct||_F : "<<err<<std::endl;
 
 
-    auto recon_err = tucker_X.reconstruction_error(X);
+    double recon_err = tucker_X.reconstruction_error(X);
     std::cout<<"||X - X_tucker||_F / ||X||_F : "<<recon_err<<std::endl;
 
 
@@ -91,27 +92,31 @@ void run_correctness(std::string& path, std::string& tensorname)
 }
 
 
+
 using ThreeD12031 = Config<Shape<100, 80, 60>, 
                             Shape<10, 8, 6>,
-                            double, double, double, 
+                            double, __half, float, __half,
                             uint64_t>;
 
 using Kinetic = Config<Shape<64, 12, 10, 60>, 
                         Shape<20, 6, 5, 20>,
-                        double, double, double, 
+                        double, double, double, double,
                         uint64_t>;
 
 using Randn5 = Config<Shape<10, 20, 10, 5, 10>,
                         Shape<5, 3, 3, 2, 5>,
-                        double, double, double, 
+                        double, double, double, double,
                         uint64_t>;
 
 using Randn4Scaled = Config<Shape<50, 50, 50, 50>,
                             Shape<25, 40, 10, 5>,
-                            double, double, double, 
+                            double, double, double, double,
                             uint64_t>;
 
-using Small = Config<Shape<3, 3, 3>, Shape<2,2,2>, double, double, double, uint64_t>;
+using Small = Config<Shape<3, 3, 3>, 
+                     Shape<2,2,2>, 
+                     double, double, double, double, 
+                     uint64_t>;
 
 
 int main(int argc, char ** argv)

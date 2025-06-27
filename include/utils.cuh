@@ -276,8 +276,14 @@ void print_h_arr(T * h_arr, size_t n, const char * prefix, Args... args)
     std::printf("\n");
     for (size_t i=0; i<n; i++)
     {
-        std::cout<<h_arr[i]<<'\n';
+        std::cout<<h_arr[i];
+        for (int j=0; j<20; j++)
+        {
+            std::cout<<" ";
+        }
+        std::cout<<"["<<prefix<<"]"<<'\n';
     }
+    std::printf("\n");
     std::flush(std::cout);
 }
 
@@ -301,12 +307,17 @@ inline void print_separator(const char * s)
 template <typename T>
 void write_h_arr(std::ofstream& ofs, T * h_arr, size_t n, const char * prefix)
 {
-    ofs<<prefix<<"\n";
+    ofs<<"--"<<prefix<<"--\n";
     for (int i=0; i<n; i++)
     {
-        ofs<<h_arr[i]<<'\n';
+        ofs<<h_arr[i];
+        for (int j=0; j<20; j++)
+        {
+            ofs<<" ";
+        }
+        ofs<<"["<<prefix<<"]:"<<i<<'\n';
     }
-    std::flush(ofs);
+    ofs<<std::endl;
 }
 
 
@@ -444,8 +455,16 @@ struct abs_functor
     __host__ __device__
     T operator()(T x) 
     {
-        return std::abs(x);
+        if constexpr(std::is_same<T, __half>::value)
+        {
+            return __habs(x);
+        }
+        else
+        {
+            return std::abs(x);
+        }
     }
+
 };
 
 }// utils
