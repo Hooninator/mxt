@@ -35,6 +35,12 @@ public:
         ASSERT( (inds.size() == vals.size()), "Number of indices %zu is not equal to number of nonzeros %zu", inds.size(), vals.size() ); 
 
         sort_inds_vals(std::move(inds), std::move(vals));
+
+        for (size_t i = 0; i<nnz; i++)
+        {
+            indmap[inds[i]] = i;
+        }
+
         d_inds = utils::h2d_cpy(inds);
         d_vals = utils::h2d_cpy(vals);
         d_vals_low = utils::d_to_u<ValueType_t, ValueTypeLow_t>(d_vals, nnz);
@@ -122,6 +128,22 @@ public:
     }
 
 
+    bool has_idx(Index_t& idx)
+    {
+        return indmap.contains(idx);
+    }
+
+
+    size_t get_idx_idx(Index_t& idx)
+    {
+        if (indmap.contains(idx))
+        {
+            return indmap[idx];
+        }
+        return nnz + 1;
+    }
+
+
     void dump(std::ofstream& ofs)
     {
         Index_t * inds = utils::d2h_cpy(d_inds, nnz);
@@ -162,6 +184,23 @@ public:
 
 
 private:
+    
+
+
+    struct IndexHash
+    {
+
+        std::size_t operator()(const Index_t& idx) const
+        {
+            std::size_t seed = 0;
+            for (IndexType_t v : idx)
+            {
+                seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
+        }
+    };
+
 
     ValueType_t * d_vals;
     ValueTypeLow_t * d_vals_low;
@@ -169,6 +208,8 @@ private:
     IndexType_t * d_colinds;
     IndexType_t * d_rowptrs;
     cusparseSpMatDescr_t cusparse_descr;
+
+    std::unordered_map<Index_t, std::size_t, IndexHash> indmap;
 
     size_t nnz;
 

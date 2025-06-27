@@ -79,7 +79,7 @@ struct TuckerTensor
         factors.reserve(Order);
         for (uint32_t i=0; i<Order; i++)
         {
-            std::string path = std::string(factors_dir) + "factor_" + std::to_string(i) + ".tns";
+            std::string path = std::string(factors_dir) + "factor_" + std::to_string(i) + "_iter0.tns";
             factors[i] = io::read_matrix_frostt<FactorValueType_t>(path.c_str(), InputModes[i], TuckerRanks[i]);
         }
     }
@@ -119,11 +119,33 @@ struct TuckerTensor
             CUDA_CHECK(cudaMalloc(&d_core, sizeof(CoreValueType_t) * Rn));
         }
 
+        utils::write_d_arr(globals::logfile, d_U_lrau, InputModes[Order - 1] * TuckerRanks[Order - 1], "d_U_lrau");
+        utils::write_d_arr(globals::logfile, d_Y_n, InputModes[Order - 1] * (Rn / TuckerRanks[Order - 1]), "d_Y_n");
+
         /* d_Y_n contains X_n (U_N x ... U_1), so we only need to compute U_n^T d_Y_n
          * but since it's stored in row major order, we actually need to compute 
          * d_Y_n^T U_n = G_n^T
+         * We have access to d_Y_n^T explicit and U_n^T explicit, so need to 
          * This means the core tensor will be stored in 'n-slice' major order */
-        linalg::gemm(d_Y_n, d_U_lrau, d_core, InputModes[Order - 1], TuckerRanks[Order - 1], Rn / TuckerRanks[Order - 1], true, false);
+        CoreValueType_t alpha = 1.0;
+        CoreValueType_t beta = 0.0;
+        CUBLAS_CHECK(cublasGemmEx(globals::cublas_handle,
+                                    CUBLAS_OP_N, CUBLAS_OP_T,
+                                    Rn / TuckerRanks[Order - 1],
+                                    TuckerRanks[Order - 1],
+                                    InputModes[Order - 1],
+                                    &alpha, d_Y_n, 
+                                    utils::to_cuda_dtype<CoreValueType_t>(),
+                                    Rn / TuckerRanks[Order - 1],
+                                    d_U_lrau,
+                                    utils::to_cuda_dtype<CoreValueType_t>(),
+                                    TuckerRanks[Order - 1],
+                                    &beta,
+                                    d_core,
+                                    utils::to_cuda_dtype<CoreValueType_t>(),
+                                    Rn / TuckerRanks[Order - 1],
+                                    utils::get_compute_type<CoreValueType_t, CoreValueType_t>(),
+                                    CUBLAS_GEMM_DEFAULT));
         core_formed = true;
     }
 
@@ -150,6 +172,89 @@ struct TuckerTensor
         CUDA_FREE(d_core_dbl);
 
         return result*result;
+    }
+
+
+    Index_t multidx(IndexType_t idx, const Index_t& dims)
+    {
+        Index_t midx;
+        int i = Order - 2; // indx N-1 increments first
+        for (int n = 0; n < Order ; n++)
+        {
+            if (i < 0)
+            {
+                i = Order - 1;
+            }
+            midx[i] = idx % dims[i];
+            idx /= dims[i];
+            i--;
+        }
+        return midx;
+    }
+
+
+    double reconstruction_error(SparseTensor_t& X)
+    {
+        double err = 0;
+
+        InputValueType_t * h_vals = utils::d2h_cpy(X.get_d_vals(), X.get_nnz());
+        Index_t * h_inds = utils::d2h_cpy(X.get_d_inds(), X.get_nnz());
+
+        CoreValueType_t * h_core = utils::d2h_cpy(d_core, Rn);
+
+        std::vector<FactorValueType_t *> h_factors(Order);
+        for (uint32_t n = 0; n < Order; n++)
+        {
+            h_factors[n] = utils::d2h_cpy(factors[n], InputModes[n] * TuckerRanks[n]);
+        }
+
+        static constexpr size_t In = std::reduce(InputModes.begin(), InputModes.end(), 1, std::multiplies<size_t>{});
+
+        static_assert(In <= std::numeric_limits<size_t>::max());
+
+    #pragma omp parallel for reduction(+:err)
+        for (size_t j = 0; j < In; j++)
+        {
+
+            Index_t X_idx = multidx(j, InputModes);
+            InputValueType_t X_val = h_vals[X.get_idx_idx(X_idx)];
+
+            double X_approx = 0;
+            for (size_t r = 0; r < Rn; r++)
+            {
+                double elem = 1;
+                Index_t G_idx = multidx(r, TuckerRanks);
+
+                for (uint32_t n = 0; n < Order; n++)
+                {
+                    elem *= (InputValueType_t)h_factors[n][X_idx[n] * TuckerRanks[n] + G_idx[n]];
+                }
+                elem *= (InputValueType_t)h_core[r];
+                X_approx += elem;
+            }
+
+            if (X.has_idx(X_idx))
+            {
+                err += std::pow(X_val - X_approx, 2);
+            }
+            else
+            {
+                err += std::pow(X_approx, 2);
+            }
+
+        }
+
+        InputValueType_t norm_X;
+        CUBLAS_CHECK(cublasNrm2Ex(globals::cublas_handle, X.get_nnz(), X.get_d_vals(), utils::to_cuda_dtype<InputValueType_t>(), 1, &norm_X, utils::to_cuda_dtype<InputValueType_t>(), utils::to_cuda_dtype<InputValueType_t>()));
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        std::for_each(h_factors.begin(), h_factors.end(), [](auto * factor) {free(factor);});
+
+        delete[] h_vals;
+        delete[] h_inds;
+        delete[] h_core;
+
+        return std::sqrt(err) / norm_X;
     }
 
 
@@ -203,6 +308,9 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     DeviceWorkspace<Lra_t> spttmc_out_ws(largest_mode * Rn); //TODO: This is an overallocation, it should be largest_most * largest product of n-1 tucker modes
     Lra_t * d_Y_n = spttmc_out_ws.d_data;
 
+    DeviceWorkspace<Lra_t> spttmc_out_moden_ws(Rn * InputModes[N - 1]);
+    Lra_t * d_Y_moden = spttmc_out_moden_ws.d_data;
+
     DeviceWorkspace<Lra_t> factor_lrau_ws(largest_mode * largest_rank); 
     Lra_t * d_U_lrau = factor_lrau_ws.d_data;
 
@@ -213,19 +321,15 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     SymbolicTTMC symbolic_ttmc(X);
 
 #if DEBUG >= 2
-    symbolic_ttmc.dump(globals::logfile);
+    X.dump(globals::logfile);
+    //symbolic_ttmc.dump(globals::logfile);
     for (int i=0; i<N; i++)
     {
-        utils::write_d_arr(globals::logfile, d_U_list[i], InputModes[i] * TuckerRanks[i], "Factor matrix");
+        utils::write_d_arr(globals::logfile, d_U_list[i], InputModes[i] * TuckerRanks[i], "Initial Factor Matrix");
     }
 #endif
 
     utils::print_separator("Done symbolic");
-
-#if DEBUG >= 2
-    std::ofstream ofs;
-    ofs.open("ttmc_out.out");
-#endif
 
     /* Main Loop */
     for (size_t iter = 0; iter < maxiters; iter++)
@@ -236,14 +340,18 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
             /* TTM chain with all but U[n] */
             utils::print_separator("SpTTMC"),
             kernels::spttmc<TTMc_t, Lra_t, IndexType_t, Index_t, N, InputShape, TuckerShape, Is>
-                           (d_X_vals, d_X_inds, d_U_list, symbolic_ttmc, d_Y_n, nnz),
+                           (d_X_vals, d_X_inds, d_U_list, symbolic_ttmc, d_Y_n, d_Y_moden, nnz),
 #if DEBUG >= 2
-            utils::write_d_arr(ofs, d_Y_n, InputModes[Is] * (Rn / TuckerRanks[Is]), "TTMc output"),
+            utils::write_d_arr(globals::logfile, d_Y_n, InputModes[Is] * (Rn / TuckerRanks[Is]), "TTMc output"),
 #endif
             /* Update U[n] with truncated SVD */
             utils::print_separator("SVD"),
-            linalg::llsv_randsvd_cusolver<Lra_t, TTMc_t, IndexType_t, 2, InputModes[Is], (Rn / TuckerRanks[Is]), TuckerRanks[Is], (Is==N)>
+            linalg::llsv_svd_cusolver<Lra_t, TTMc_t, IndexType_t, (Rn / TuckerRanks[Is]), InputModes[Is], TuckerRanks[Is], (Is==(N-1))>
                                          (d_Y_n, d_U_list[Is], d_U_lrau)
+#if DEBUG >= 2
+            ,
+            utils::write_d_arr(globals::logfile, d_U_list[Is], InputModes[Is] * TuckerRanks[Is], "Updated Factor Matrix")
+#endif
          ), ...);
         }(std::make_index_sequence<N>{});
 
@@ -251,7 +359,7 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
 
         /* Form core tensor */
         utils::print_separator("Forming core");
-        X_tucker.form_core(d_Y_n, d_U_lrau);
+        X_tucker.form_core(d_Y_moden, d_U_lrau);
 
 #if DEBUG >= 2
         utils::write_d_arr(globals::logfile, X_tucker.d_core, Rn, "Core Tensor");
@@ -266,10 +374,6 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
         /* Clear spttmc_out_ws */
         spttmc_out_ws.zero();
     }
-
-#if DEBUG >= 2
-    ofs.close();
-#endif
 
     return X_tucker;
 }

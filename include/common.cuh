@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <algorithm>
 #include <numeric>
@@ -15,6 +16,7 @@
 #include <utility>
 #include <type_traits>
 #include <functional>
+#include <unordered_set>
 
 #include <unistd.h>
 
@@ -25,8 +27,11 @@
 #include <cusparse.h>
 #include <cusolverDn.h>
 
-#define DEBUG 2
-//#define DEBUG_SPTTMC_KERNEL 1
+
+#include <omp.h>
+
+#define DEBUG 0
+#define DEBUG_SPTTMC_KERNEL 0
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

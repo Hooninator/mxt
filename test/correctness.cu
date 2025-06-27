@@ -82,8 +82,8 @@ void run_correctness(std::string& path, std::string& tensorname)
     std::cout<<"|| G_correct - G_computed||_F / ||G_correct||_F : "<<err<<std::endl;
 
 
-    //auto recon_err = tucker_X.reconstruction_error(X);
-    //std::cout<<"||X - X_tucker||_F / ||X||_F : "<<recon_err<<std::endl;
+    auto recon_err = tucker_X.reconstruction_error(X);
+    std::cout<<"||X - X_tucker||_F / ||X||_F : "<<recon_err<<std::endl;
 
 
     CUDA_FREE(d_correct_core_t);

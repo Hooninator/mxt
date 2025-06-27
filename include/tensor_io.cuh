@@ -22,6 +22,11 @@ void parse_frostt_line(std::string& line, Index_t& idx, Value_t& val)
     }
     epos = line.size();
     val = static_cast<Value_t>(std::stod(line.substr(spos, epos - spos)));
+
+    if (val == -0.0) // No negative zeros
+    {
+        val = 0.0;
+    }
 }
 
 

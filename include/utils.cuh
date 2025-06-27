@@ -155,6 +155,29 @@ T * h2d_cpy(std::vector<T> h_arr)
 }
 
 
+template <typename T>
+T * d2d_cpy(T * d_arr, size_t n)
+{
+    T * d_arr2;
+    CUDA_CHECK(cudaMalloc(&d_arr2, sizeof(T) * n));
+    CUDA_CHECK(cudaMemcpy(d_arr2, d_arr, sizeof(T) * n, cudaMemcpyDeviceToDevice));
+    return d_arr2;
+}
+
+
+template <typename T>
+void d2d_cpy(T * d_arr, T * d_arr2, size_t n)
+{
+    CUDA_CHECK(cudaMemcpy(d_arr2, d_arr, sizeof(T) * n, cudaMemcpyDeviceToDevice));
+}
+
+
+template <typename T>
+void d2d_cpy_async(T * d_arr, T * d_arr2, size_t n)
+{
+    CUDA_CHECK(cudaMemcpyAsync(d_arr2, d_arr, sizeof(T) * n, cudaMemcpyDeviceToDevice));
+}
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  *               PRECISION 
@@ -360,6 +383,32 @@ inline constexpr cudaDataType to_cuda_dtype()
 }
 
 
+template <typename In, typename Out>
+cublasComputeType_t get_compute_type()
+{
+    if constexpr (std::is_same<In, __half>::value)
+    {
+        if constexpr (std::is_same<Out, __half>::value)
+        {
+            return CUBLAS_COMPUTE_16F;
+        }
+        if constexpr (std::is_same<Out, float>::value)
+        {
+            return CUBLAS_COMPUTE_32F;
+        }
+    }
+    if constexpr (std::is_same<In, float>::value)
+    {
+        return CUBLAS_COMPUTE_32F;
+    }
+    if constexpr (std::is_same<In, double>::value)
+    {
+        return CUBLAS_COMPUTE_64F;
+    }
+
+}
+
+
 template <typename I>
 inline constexpr cusparseIndexType_t to_cusparse_idx()
 {
@@ -374,8 +423,30 @@ inline constexpr cusparseIndexType_t to_cusparse_idx()
 }
 
     
+template <typename T1, typename T2>
+constexpr inline bool same()
+{
+    return std::is_same<T1, T2>::value;
+}
 
 
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *                   MISC
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+template <typename T>
+struct abs_functor
+{
+    __host__ __device__
+    T operator()(T x) 
+    {
+        return std::abs(x);
+    }
+};
 
 }// utils
 }// mxt
