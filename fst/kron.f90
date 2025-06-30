@@ -5,16 +5,17 @@ implicit none
 
 contains
 
-    subroutine kron_prod_rows(matrices, Y, N)
+    subroutine kron_prod_rows(matrices, Y, val, N)
         type(matrix_t), intent(in) :: matrices(:)
         real(dp), intent(inout) :: Y(:)
         integer, intent(in) :: N
+        real(dp), intent(in) :: val
 
         select case (N)
             case (3)
-                call kron_prod_rows2(matrices, Y)
+                call kron_prod_rows2(matrices, Y, val)
             case (4)
-                call kron_prod_rows3(matrices, Y)
+                call kron_prod_rows3(matrices, Y, val)
             !case (5)
             !    call kron_prod_rows4(matrices, Y)
         end select
@@ -22,9 +23,10 @@ contains
     end subroutine
 
 
-    subroutine kron_prod_rows2(matrices, Y)
+    subroutine kron_prod_rows2(matrices, Y, val)
         type(matrix_t), intent(in) :: matrices(:)
         real(dp), intent(inout) :: Y(:)
+        real(dp), intent(in) :: val
 
         integer :: i, j
         integer :: r1, r2
@@ -34,16 +36,17 @@ contains
 
         do i=1, r1
             do j=1, r2
-                Y(j + (i - 1) * r2) = Y(j + (i - 1) * r2) + matrices(1)%data(1, i) * matrices(2)%data(1, j)
+                Y(j + (i - 1) * r2) = Y(j + (i - 1) * r2) + val * matrices(1)%data(1, i) * matrices(2)%data(1, j)
             end do
         end do
 
     end subroutine
 
 
-    subroutine kron_prod_rows3(matrices, Y)
+    subroutine kron_prod_rows3(matrices, Y, val)
         type(matrix_t), intent(in) :: matrices(:)
         real(dp), intent(inout) :: Y(:)
+        real(dp), intent(in) :: val
 
         integer :: i, j, k
         integer :: r1, r2, r3
@@ -55,7 +58,8 @@ contains
         do i=1, r1
             do j=1, r2
                 do k = 1, r3
-                    Y(k + (j - 1) * r3 + (i - 1) * r2 * r3) = Y(k + (j - 1) * r3 + (i - 1) * r2 * r3) + matrices(1)%data(1, i) &
+                    Y(k + (j - 1) * r3 + (i - 1) * r2 * r3) = Y(k + (j - 1) * r3 + (i - 1) * r2 * r3) &
+                    + val * matrices(1)%data(1, i) &
                     * matrices(2)%data(1, j) * matrices(3)%data(1, k)
                 end do
             end do

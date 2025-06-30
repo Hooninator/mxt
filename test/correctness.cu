@@ -27,7 +27,7 @@ struct Config
 };
 
 
-static const char * base = "../test/correctness/cases/fst_cases/";
+static const char * base = "../test/correctness/fst_cases/";
 
 
 template <typename Conf>
@@ -95,7 +95,7 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 using ThreeD12031 = Config<Shape<100, 80, 60>, 
                             Shape<10, 8, 6>,
-                            double, __half, float, __half,
+                            double, double, double, double,
                             uint64_t>;
 
 using Kinetic = Config<Shape<64, 12, 10, 60>, 

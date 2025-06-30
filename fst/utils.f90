@@ -29,15 +29,21 @@ contains
     end subroutine
 
 
-    subroutine write_mat(X, path)
+    subroutine write_mat(X, path, append)
         real(dp), intent(in) :: X(:,:)
         character(256), intent(in) :: path
+        integer, intent(in), optional :: append
 
         integer :: i, j
 
         integer :: fd = 1
 
-        open(fd, file=path)
+        if (present(append)) then
+            open(fd, file=path, access="append")
+            write(fd, *) "==========="
+        else
+            open(fd, file=path)
+        end if
 
         do i = 1, size(X,1)
             do j = 1, size(X,2)
@@ -69,8 +75,8 @@ contains
         do i = 1, size(X,1)
             ind(N) = i
             do j = 1, size(X, 2)
-                idx = j
-                do k = N - 1, 1, -1
+                idx = j - 1
+                do k = N-1, 1, -1
                     ind(k) = mod(idx, ranks(k)) + 1
                     idx = idx / ranks(k)
                 end do

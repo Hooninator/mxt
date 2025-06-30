@@ -30,3 +30,6 @@ endmacro()
 
 add_test(driver)
 add_test(correctness)
+
+
+add_subdirectory(./fst ./fst)

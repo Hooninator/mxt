@@ -1,4 +1,3 @@
-
 program main
 
     use sparse_tucker
@@ -18,6 +17,7 @@ program main
     integer :: i
 
     real(dp) :: stime, etime
+    real(dp) :: err
 
     integer, allocatable :: ranks(:)
     real(dp), allocatable :: core(:, :)
@@ -48,6 +48,9 @@ program main
     call cpu_time(etime)
     print*, "Done"
     print*, "Elapsed time: ", etime - stime, "s"
+
+    err = compute_err(X, core, factors, ranks)
+    print*, "Reconstruction error: ", err
 
     call write_tensor(core, ranks, "core_final.tns")
 

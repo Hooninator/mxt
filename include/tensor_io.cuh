@@ -40,7 +40,6 @@ T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N)
     while (std::getline(infile, line))
     {
         parse_frostt_line<std::array<size_t, 2>, T, 2>(line, idx, val);
-        std::cout<<line<<std::endl;
         vals[idx[0] * N + idx[1]] = val;
     }
 

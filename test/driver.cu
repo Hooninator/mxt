@@ -32,6 +32,7 @@ void run_tensor(std::string& path)
 
 
     utils::print_separator("Beginning Tucker");
+
     auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
     utils::print_separator("Done Tucker");
 
