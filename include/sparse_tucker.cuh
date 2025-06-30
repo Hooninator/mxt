@@ -208,16 +208,11 @@ struct TuckerTensor
             h_factors[n] = utils::d2h_cpy(factors[n], InputModes[n] * TuckerRanks[n]);
         }
 
-        static constexpr size_t In = std::reduce(InputModes.begin(), InputModes.end(), 1, std::multiplies<size_t>{});
-
-        static_assert(In <= std::numeric_limits<size_t>::max());
-
-    #pragma omp parallel for reduction(+:err)
-        for (size_t j = 0; j < In; j++)
+        #pragma omp parallel for reduction(+:err)
+        for (size_t j = 0; j < X.get_nnz(); j++)
         {
-
-            Index_t X_idx = multidx(j, InputModes);
-            InputValueType_t X_val = h_vals[X.get_idx_idx(X_idx)];
+            InputValueType_t X_val = h_vals[j];
+            Index_t X_idx = h_inds[j];
 
             double X_approx = 0;
             for (size_t r = 0; r < Rn; r++)
@@ -233,16 +228,9 @@ struct TuckerTensor
                 X_approx += elem;
             }
 
-            if (X.has_idx(X_idx))
-            {
-                err += std::pow(X_val - X_approx, 2);
-            }
-            else
-            {
-                err += std::pow(X_approx, 2);
-            }
-
+            err += std::pow(X_val - X_approx, 2);
         }
+
 
         InputValueType_t norm_X;
         CUBLAS_CHECK(cublasNrm2Ex(globals::cublas_handle, X.get_nnz(), X.get_d_vals(), utils::to_cuda_dtype<InputValueType_t>(), 1, &norm_X, utils::to_cuda_dtype<InputValueType_t>(), utils::to_cuda_dtype<InputValueType_t>()));
@@ -255,6 +243,12 @@ struct TuckerTensor
         delete[] h_core;
 
         return std::sqrt(err) / norm_X;
+    }
+
+
+    void dump_core(std::ofstream& ofs)
+    {
+        utils::write_d_arr(ofs, d_core, Rn, "Core Tensor");
     }
 
 
@@ -316,6 +310,7 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
      * Each entry of this array is a device pointer
      */
     utils::print_separator("Beginning Symbolic");
+    X.dump(globals::logfile);
     SymbolicTTMC symbolic_ttmc(X);
 
 #if DEBUG >= 2
@@ -346,7 +341,7 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
             utils::print_separator("SVD"),
             linalg::llsv_svd_cusolver<Lra_t, CoreTensor_t, TTMc_t, IndexType_t, (Rn / TuckerRanks[Is]), InputModes[Is], TuckerRanks[Is], (Is==(N-1))>
                                          (d_Y_n, d_U_list[Is], d_U_core)
-#if DEBUG >= 2
+#if DEBUG >= 1
             ,
             utils::write_d_arr(globals::logfile, d_U_list[Is], InputModes[Is] * TuckerRanks[Is], "Updated Factor Matrix")
 #endif

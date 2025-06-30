@@ -30,16 +30,33 @@ void run_tensor(std::string& path)
     SparseTensor_t X = io::read_tensor_frostt<SparseTensor_t>(path.c_str());
     utils::print_separator("Done IO");
 
+
     utils::print_separator("Beginning Tucker");
     auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
     utils::print_separator("Done Tucker");
+
+
+    auto err = tucker_X.reconstruction_error(X);
+    std::cout<<"||X - X_tucker||_F / ||X||_F : "<<err<<std::endl;
+
+    std::ofstream core_file;
+    core_file.open("core.out");
+
+    tucker_X.dump_core(core_file);
+
+    core_file.close();
 }
 
 
 using NipsTns = Config<Shape<2482, 2862, 14036, 17>, 
                         Shape<10, 10, 10, 10>,
-                        double, __half, float, float,
+                        double, double, double, double,
                         uint64_t>;
+
+using ChicagoCrime = Config<Shape<6186, 24, 77, 32>,
+                            Shape<20, 20, 20, 20>,
+                            double, double, double, double,
+                            uint64_t>;
 
 using Randn5Tns = Config<Shape<10, 20, 10, 5, 10>, 
                         Shape<5, 3, 3, 2, 5>,
@@ -73,6 +90,10 @@ int main(int argc, char ** argv)
     if (tensor.compare("nips")==0)
     {
         run_tensor<NipsTns>(path);
+    }
+    else if (tensor.compare("crime")==0)
+    {
+        run_tensor<ChicagoCrime>(path);
     }
     else if (tensor.compare("randn3")==0)
     {

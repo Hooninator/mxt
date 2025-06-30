@@ -16,7 +16,11 @@ contains
         integer, intent(in) :: maxiters
 
         integer :: Rn, nnz, N
-        integer :: i,  k
+        integer :: i,  k, iter
+
+        character(256) :: factor_name
+        character(7) :: factor_ = "factor"
+        character(9) :: tns = "iter0.tns"
 
         integer :: lwork, info
         real(dp), pointer :: work(:)
@@ -48,7 +52,11 @@ contains
 
         ! Init factors
         do i = 1, N
+            iter = i
             call init_factor(factors(i), modes(i), ranks(i))
+            write(factor_name, '(A,"_",I0,"_",A)') trim(factor_), iter-1 ,trim(tns)
+            print*, factor_name
+            call write_mat(factors(i)%data, factor_name)
         end do
 
         ! Main Loop
@@ -170,17 +178,21 @@ contains
     end subroutine spttmc
 
 
-    function err(X, core, factors) result(err)
+    function compute_err(X, core, factors) result(err)
 
         type(sptensor_t), intent(in) :: X
         real(dp), intent(in) :: core(:,:)
         type(matrix_t), intent(in) :: factors(:)
-        real(dp) :: err = 0.0
+        real(dp) :: err
         
+        integer :: i, j, k
 
+        err = 0.0
+        do i=1, X%nnz
 
+        end do
 
-    end function err
+    end function compute_err
 
 
 end module

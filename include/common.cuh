@@ -30,7 +30,7 @@
 
 #include <omp.h>
 
-#define DEBUG 0
+#define DEBUG 2
 #define DEBUG_SPTTMC_KERNEL 0
 
 
@@ -57,7 +57,7 @@ cusparseHandle_t cusparse_handle;
 void mxt_init()
 {
 
-#if DEBUG >= 2
+#if DEBUG >= 1
     globals::logfile.open("logfile.out");
 #endif
 
@@ -70,7 +70,7 @@ void mxt_init()
 void mxt_finalize()
 {
 
-#if DEBUG >= 2
+#if DEBUG >= 1
     globals::logfile.close();
 #endif
 

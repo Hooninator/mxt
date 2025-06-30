@@ -49,7 +49,7 @@ program main
     print*, "Done"
     print*, "Elapsed time: ", etime - stime, "s"
 
-    call write_mat(core, "core.out")
+    call write_tensor(core, ranks, "core_final.tns")
 
     call free_sptensor(X)
 

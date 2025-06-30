@@ -27,7 +27,7 @@ struct Config
 };
 
 
-static const char * base = "../test/correctness/cases/";
+static const char * base = "../test/correctness/cases/fst_cases/";
 
 
 template <typename Conf>

@@ -40,6 +40,7 @@ T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N)
     while (std::getline(infile, line))
     {
         parse_frostt_line<std::array<size_t, 2>, T, 2>(line, idx, val);
+        std::cout<<line<<std::endl;
         vals[idx[0] * N + idx[1]] = val;
     }
 
@@ -95,6 +96,9 @@ SparseTensor_t read_tensor_frostt(const char * fpath)
     //First, get the tensor order
     std::string line;
     std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
 
     uint32_t order = 0;
     for (char c : line)
@@ -108,6 +112,10 @@ SparseTensor_t read_tensor_frostt(const char * fpath)
 
     // Reset back to start
     infile.seekg(0);
+    std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
 
     Index_t idx;
     Value_t val;
