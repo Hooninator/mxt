@@ -91,4 +91,21 @@ contains
 
     end subroutine
 
+
+    subroutine write_err(err)
+        real(dp), intent(in) :: err
+
+        character(256) :: path = "fst_err.out"
+        integer :: fd, ios
+
+        fd = 1
+        open(fd, file=path)
+
+        write(fd, '(ES13.6)') err
+
+        close(fd)
+
+    end subroutine
+
+
 end module utils

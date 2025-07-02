@@ -55,8 +55,8 @@ contains
         do i = 1, N
             iter = i
             call init_factor(factors(i), modes(i), ranks(i))
-            write(factor_name, '(A,"_",I0,"_",A)') trim(factor_), iter-1 ,trim(tns)
-            call write_mat(factors(i)%data, factor_name)
+            !write(factor_name, '(A,"_",I0,"_",A)') trim(factor_), iter-1 ,trim(tns)
+            !call write_mat(factors(i)%data, factor_name)
         end do
 
         ! Main Loop

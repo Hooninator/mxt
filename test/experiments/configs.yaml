@@ -28,3 +28,12 @@ uber:
     "__half, float, __half"
   ]
   
+
+3D_12031:
+  shape: [100, 80, 60]
+  ranks: [10, 8, 6]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, __half"
+  ]

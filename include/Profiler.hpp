@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <chrono>
 
 #include <cuda_runtime.h>
 
@@ -50,22 +51,25 @@ public:
             names.push_back(name);
         }
 
+        size_t n;
         for (auto& name : names)
         {
             ofs<<name<<",";
+            n = stats[name].size();
         }
         ofs<<std::endl;
 
-        for (auto& name : names)
+        for (size_t i = 0; i < n; i++)
         {
-            auto stat_vec = stats[name];
-            for (double stat: stat_vec)
+            for (auto& name : names)
             {
-                ofs<<stat<<",";
+                const auto& stat_vec = stats[name];
+                ofs<<stat_vec[i]<<",";
             }
             ofs<<std::endl;
         }
 
+        stats.clear();
 
         ofs.close();
     }
@@ -90,6 +94,7 @@ public:
         else
         {
             active_timers[name_str] = std::make_unique<Timer>(Timer(name_str));
+            active_timers[name_str]->start();
         }
     }
 
@@ -119,9 +124,26 @@ public:
     }
 
 
-    inline void print_timer(const char * name)
+    void print_timer(const char * name)
     {
-        std::cout<<"["<<name<<"]"<<active_timers[std::string(name)]<<"s"<<std::endl;
+        std::string name_str(name);
+        if (!active_timers.contains(name_str))
+        {
+            std::cerr<<"Timer "<<name<<" not in active timers."<<std::endl;
+        }
+        else
+        {
+            std::cout<<"["<<name<<"]: "<<active_timers[name_str]->elapsed<<"s"<<std::endl;
+        }
+    }
+
+
+    void print_timers()
+    {
+        for (auto& [name, timer] : active_timers)
+        {
+            print_timer(name.c_str());
+        }
     }
 
 
@@ -138,23 +160,26 @@ public:
             names.push_back(name);
         }
 
+        size_t n;
         for (auto& name : names)
         {
             ofs<<name<<",";
+            n = committed_timers[name].size();
         }
         ofs<<std::endl;
 
-        for (auto& name : names)
+        for (size_t i=0; i<n; i++)
         {
-            for (auto& timer : committed_timers[name])
+            for (auto& name : names)
             {
-                ofs<<timer->elapsed<<",";
+                ofs<<committed_timers[name][i]->elapsed<<",";
             }
             ofs<<std::endl;
         }
 
-
         ofs.close();
+
+        committed_timers.clear();
     }
 
 
@@ -162,29 +187,35 @@ private:
 
     struct Timer
     {
+
+        using clock_t = std::chrono::high_resolution_clock;
+
         Timer(std::string name):
             name(name),
             elapsed(0.0),
             active(false)
         {
-            cudaEventCreate(&start_t);
-            cudaEventCreate(&end_t);
+        }
+
+
+        inline clock_t::time_point now()
+        {
+            return clock_t::now();
         }
 
 
         void start()
         {
-            cudaEventRecord(start_t);
             active = true;
+            start_t = now();
         }
 
 
         void stop()
         {
-            cudaEventRecord(end_t);
-            float inc;
-            cudaEventElapsedTime(&inc, start_t, end_t);
-            elapsed += inc;
+            end_t = now();
+            double elapsed_this = (std::chrono::duration_cast<std::chrono::duration<double>>(end_t - start_t).count());
+            elapsed += elapsed_this;
             active = false;
         }
 
@@ -195,18 +226,11 @@ private:
         }
 
 
-        ~Timer()
-        {
-            cudaEventDestroy(start_t);
-            cudaEventDestroy(end_t);
-        }
-
-
         std::string name;
-        float elapsed;
+        double elapsed;
         bool active;
-        cudaEvent_t start_t;
-        cudaEvent_t end_t;
+        clock_t::time_point start_t;
+        clock_t::time_point end_t;
     };
 
 

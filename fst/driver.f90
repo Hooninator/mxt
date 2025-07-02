@@ -1,3 +1,5 @@
+
+
 program main
 
     use sparse_tucker
@@ -52,7 +54,8 @@ program main
     err = compute_err(X, core, factors, ranks)
     print*, "Reconstruction error: ", err
 
-    call write_tensor(core, ranks, "core_final.tns")
+    !call write_tensor(core, ranks, "core_final.tns")
+    call write_err(err)
 
     call free_sptensor(X)
 

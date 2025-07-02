@@ -14,7 +14,7 @@
 using namespace mxt;
 
 
-static const char * base = "../test/correctness/fst_cases/";
+static const char * base = "../test/correctness/cases/";
 
 
 template <typename Conf>
@@ -62,13 +62,8 @@ void run_correctness(std::string& path, std::string& tensorname)
     thrust::transform(d_correct_core_ptr, d_correct_core_ptr + Rn, d_correct_core_ptr, utils::abs_functor<typename Conf::CoreTensorU_t>{});
 
 
-    utils::write_d_arr(globals::logfile, d_correct_core_t, Rn, "correct_core_t");
-    utils::write_d_arr(globals::logfile, d_correct_core, Rn, "computed_core");
-
-
     double err = linalg::relative_frob_norm(d_correct_core_t, d_correct_core, Rn);
     std::cout<<"|| G_correct - G_computed||_F / ||G_correct||_F : "<<err<<std::endl;
-
 
     double recon_err = tucker_X.reconstruction_error(X);
     std::cout<<"||X - X_tucker||_F / ||X||_F : "<<recon_err<<std::endl;
@@ -90,15 +85,6 @@ using Kinetic = Config<Shape<64, 12, 10, 60>,
                         double, double, double, double,
                         uint64_t>;
 
-using Randn5 = Config<Shape<10, 20, 10, 5, 10>,
-                        Shape<5, 3, 3, 2, 5>,
-                        double, double, double, double,
-                        uint64_t>;
-
-using Randn4Scaled = Config<Shape<50, 50, 50, 50>,
-                            Shape<25, 40, 10, 5>,
-                            double, double, double, double,
-                            uint64_t>;
 
 using Small = Config<Shape<3, 3, 3>, 
                      Shape<2,2,2>, 
@@ -128,14 +114,6 @@ int main(int argc, char ** argv)
     else if (tensor.compare("kinetic")==0)
     {
         run_correctness<Kinetic>(path, tensor);
-    }
-    else if (tensor.compare("randn5")==0)
-    {
-        run_correctness<Randn5>(path, tensor);
-    }
-    else if (tensor.compare("randn4_scaled")==0)
-    {
-        run_correctness<Randn4Scaled>(path, tensor);
     }
     else if (tensor.compare("small")==0)
     {

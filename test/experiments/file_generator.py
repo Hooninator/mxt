@@ -1,58 +1,7 @@
 
 from yaml import load, Loader
+import os
 
-
-top= """
-#include "mxt.cuh"
-#include "Config.hpp"
-
-#include <map>
-#include <string>
-
-#define NTRIALS 5
-
-using namespace mxt;
-
-
-template <typename Conf>
-void run_trial(std::string& path)
-{
-    using SparseTensor_t = SparseTensor<typename Conf::HighU_t, typename Conf::LowU_t, typename Conf::Idx_t, Conf::Order, typename Conf::InputModes_t>;
-
-    utils::print_separator("Beginning IO");
-    SparseTensor_t X = io::read_tensor_frostt<SparseTensor_t>(path.c_str());
-    utils::print_separator("Done IO");
-
-
-    utils::print_separator("Beginning Tucker");
-    globals::profiler->start_timer("hooi");
-    auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
-    globals::profiler->stop_timer("hooi");
-    globals::profiler->print_timer("hooi");
-    utils::print_separator("Done Tucker");
-
-
-    auto err = tucker_X.reconstruction_error(X);
-    std::cout<<"||X - X_tucker||_F / ||X||_F : "<<err<<std::endl;
-
-    std::ofstream core_file;
-    core_file.open("core.out");
-    tucker_X.dump_core(core_file);
-    core_file.close();
-}
-
-
-template <typename... Confs>
-void run(std::string& path)
-{
-    (Confs::print(), ...);
-    for (uint32_t t = 0; t < NTRIALS; t++)
-    {
-        (run_trial<Confs>(path), ...);
-    }
-}
-
-"""
 
 cmake_top = """
 macro(add_exp name)
@@ -65,11 +14,23 @@ endmacro()
 add_exp(driver)
 """
 
-with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmakefile:
+runner_top = """#!/usr/bin/bash
+#SBATCH -A m1266_g
+#SBATCH -C gpu
+#SBATCH -q regular
+#SBATCH -t 3:00:00
+#SBATCH -N 1
+
+export OMP_NUM_THREADS=64
+"""
+
+with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmakefile, open("../../build/run.sh", "w") as runner:
     yaml_txt = file.read()
     data = load(yaml_txt, Loader=Loader)
 
     cmakefile.write(cmake_top)
+
+    runner.write(runner_top)
 
     for tensor in data:
         filename = f"{tensor}.cu"
@@ -77,7 +38,7 @@ with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmake
         ranks = ','.join([str(s) for s in data[tensor]["ranks"]])
         configs = data[tensor]["configs"]
         with open(f"./{filename}", 'w') as file:
-            file.write(top)
+            file.write('#include "run.cuh"\n')
             conf_strs = []
             for i in range(len(configs)):
                 conf_str = f"""using Conf{i} = Config<Shape<{shape}>,
@@ -91,7 +52,7 @@ with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmake
             bottom = f"""
             int main(int argc, char ** argv)
             {{
-                std::string path("$SCRATCH/tensors/{tensor}.tns");
+                std::string path("../tensors/{tensor}.tns");
                 mxt_init();
                 run<{','.join(conf_strs)}>(path);
                 mxt_finalize();
@@ -99,10 +60,12 @@ with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmake
             }}\n
             """
             file.write(bottom)
+
         cmakefile.write(f"add_exp({tensor})\n")
 
-
-
-
-
+        runner.write(f"srun -n 1 -G 1 ./experiments/{tensor}\n")
+        runner.write(f"srun -n 1 ./fst/fst ../tensors/{tensor}.tns {' '.join([str(s) for s in data[tensor]['ranks']])}\n")
+        runner.write(f"mkdir ../test/experiments/data/{tensor}\n")
+        runner.write(f"mv *.csv ../test/experiments/data/{tensor}\n")
+        runner.write(f"mv fst_err.out ../test/experiments/data/{tensor}\n")
 

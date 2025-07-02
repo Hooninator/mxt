@@ -17,23 +17,16 @@ void run_trial(std::string& path)
     SparseTensor_t X = io::read_tensor_frostt<SparseTensor_t>(path.c_str());
     utils::print_separator("Done IO");
 
-
-
     utils::print_separator("Beginning Tucker");
     globals::profiler->start_timer("hooi");
     auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
     globals::profiler->stop_timer("hooi");
-    globals::profiler->print_timer("hooi");
+    globals::profiler->print_timers();
     utils::print_separator("Done Tucker");
 
-
     auto err = tucker_X.reconstruction_error(X);
-    std::cout<<"||X - X_tucker||_F / ||X||_F : "<<err<<std::endl;
+    std::cout<<"[Reconstruction Error]: "<<err<<std::endl;
 
-    std::ofstream core_file;
-    core_file.open("core.out");
-    tucker_X.dump_core(core_file);
-    core_file.close();
 }
 
 

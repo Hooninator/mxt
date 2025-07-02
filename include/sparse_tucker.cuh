@@ -46,7 +46,7 @@ struct TuckerTensor
         init_factors(init, factors_dir);
     }
 
-    
+
     void init_factors(const char * init, const char * factors_dir)
     {
         std::string init_str(init);
@@ -309,38 +309,36 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     /* Symbolic TTMc -- record indices of all nonzeros that contribute to each row of the TTMc outputs 
      * Each entry of this array is a device pointer
      */
-    utils::print_separator("Beginning Symbolic");
-    X.dump(globals::logfile);
     SymbolicTTMC symbolic_ttmc(X);
 
 #if DEBUG >= 2
     X.dump(globals::logfile);
-    //symbolic_ttmc.dump(globals::logfile);
     for (int i=0; i<N; i++)
     {
         utils::write_d_arr(globals::logfile, d_U_list[i], InputModes[i] * TuckerRanks[i], "Initial Factor Matrix");
     }
 #endif
 
-    utils::print_separator("Done symbolic");
-
     /* Main Loop */
     for (size_t iter = 0; iter < maxiters; iter++)
     {
+        std::cout<<"\tIteration "<<iter<<std::endl;
         [&]<std::size_t... Is>(std::index_sequence<Is...>)
         {
         ((
             /* TTM chain with all but U[n] */
-            utils::print_separator("SpTTMC"),
+            globals::profiler->start_timer("ttmc"),
             kernels::spttmc<TTMc_t, Lra_t, CoreTensor_t, IndexType_t, Index_t, N, InputShape, TuckerShape, Is>
                            (d_X_vals, d_X_inds, d_U_list, symbolic_ttmc, d_Y_n, d_Y_moden, nnz),
+            globals::profiler->stop_timer("ttmc"),
 #if DEBUG >= 2
             utils::write_d_arr(globals::logfile, d_Y_n, InputModes[Is] * (Rn / TuckerRanks[Is]), "TTMc output"),
 #endif
             /* Update U[n] with truncated SVD */
-            utils::print_separator("SVD"),
+            globals::profiler->start_timer("svd"),
             linalg::llsv_svd_cusolver<Lra_t, CoreTensor_t, TTMc_t, IndexType_t, (Rn / TuckerRanks[Is]), InputModes[Is], TuckerRanks[Is], (Is==(N-1))>
-                                         (d_Y_n, d_U_list[Is], d_U_core)
+                                         (d_Y_n, d_U_list[Is], d_U_core),
+            globals::profiler->stop_timer("svd")
 #if DEBUG >= 1
             ,
             utils::write_d_arr(globals::logfile, d_U_list[Is], InputModes[Is] * TuckerRanks[Is], "Updated Factor Matrix")
@@ -351,8 +349,9 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
         CUDA_CHECK(cudaDeviceSynchronize());
 
         /* Form core tensor */
-        utils::print_separator("Forming core");
+        globals::profiler->start_timer("core");
         X_tucker.form_core(d_Y_moden, d_U_core);
+        globals::profiler->stop_timer("core");
 
 #if DEBUG >= 2
         utils::write_d_arr(globals::logfile, X_tucker.d_core, Rn, "Core Tensor");

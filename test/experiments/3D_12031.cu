@@ -1,23 +1,23 @@
 #include "run.cuh"
-using Conf0 = Config<Shape<64,12,10,60>,
-                                                      Shape<10,10,10,10>,
+using Conf0 = Config<Shape<100,80,60>,
+                                                      Shape<10,8,6>,
                                                       double, double, double, double,
                                                       uint64_t>;
 
-                using Conf1 = Config<Shape<64,12,10,60>,
-                                                      Shape<10,10,10,10>,
+                using Conf1 = Config<Shape<100,80,60>,
+                                                      Shape<10,8,6>,
                                                       double, float, float, float,
                                                       uint64_t>;
 
-                using Conf2 = Config<Shape<64,12,10,60>,
-                                                      Shape<10,10,10,10>,
+                using Conf2 = Config<Shape<100,80,60>,
+                                                      Shape<10,8,6>,
                                                       double, __half, float, __half,
                                                       uint64_t>;
 
                 
             int main(int argc, char ** argv)
             {
-                std::string path("../tensors/kinetic.tns");
+                std::string path("../tensors/3D_12031.tns");
                 mxt_init();
                 run<Conf0,Conf1,Conf2>(path);
                 mxt_finalize();

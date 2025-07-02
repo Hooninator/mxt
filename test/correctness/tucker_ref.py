@@ -1,7 +1,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorly as tl
+#import tensorly as tl
+import tensorly.contrib.sparse as stl
+from tensorly.contrib.sparse.decomposition import tucker
 import torch
 import pandas as pd
 
@@ -14,7 +16,17 @@ from scipy.io import loadmat
 import time
 import os
 import argparse
+import sparse
 from yaml import load, Loader
+
+
+from scipy.sparse.linalg import svds
+def sparse_svd(matrix, full_matrices=False):
+    U, S, Vt = svds(matrix)
+    return U[:, ::-1], S[::-1], Vt[::-1, :]  # sort descending
+
+import tensorly as tl
+tl.backend.svd = sparse_svd
 
 
 ##################################################
@@ -42,9 +54,21 @@ def read_tensor(config):
     return tensor
 
 
+def read_sparse_tensor(config):
+    inds = []
+    vals = []
+    with open(f"{base}{config['name']}.tns", 'r') as file:
+        for entry in file:
+            stuff = entry.split(" ")
+            inds.append([int(s) - 1 for s in stuff[:-1]])
+            vals.append(float(stuff[-1]))
+    print(np.array(inds).transpose(), vals)
+    X_coo = sparse.COO(np.array(inds).transpose(), vals, shape=config["shape"])
+    return stl.tensor(X_coo)
+
+
 def compute_error(X, G, U_list):
     T = reconstruct(G, U_list)
-    print(T)
     return (torch.linalg.norm(X - T) / torch.linalg.norm(X)).item()
 
 
@@ -131,6 +155,7 @@ def write_tensor(filename, X):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--maxiters", type=int)
+    parser.add_argument("--mode", type=str)
     args = parser.parse_args()
 
     with open("./test.yaml", 'r') as file:
@@ -146,7 +171,12 @@ if __name__ == "__main__":
             if not os.path.isdir(f"./cases/{config['name']}"):
                 os.mkdir(f"./cases/{config['name']}")
 
-            X = read_tensor(config)
+            #X = read_tensor(config)
+            X = read_sparse_tensor(config)
+
+            G_ref, U_list_ref = tucker(X, config["ranks"], n_iter_max=args.maxiters, init='random')
+            write_tensor("core.tns", G_ref)
+            raise Exception
 
 
             # Get the initial factors 
@@ -190,6 +220,8 @@ if __name__ == "__main__":
             G_ref, U_list_ref = tl.decomposition.tucker(
                 X.numpy(), config["ranks"], n_iter_max=args.maxiters, tol=1e-16)
             G_ref = torch.tensor(G_ref)
+
+            T = reconstruct(G_ref, U_list_ref)
 
             for i in range(len(U_list_ref)):
                 U_list_ref[i] = torch.tensor(U_list_ref[i])
