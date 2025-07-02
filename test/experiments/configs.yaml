@@ -1,0 +1,30 @@
+
+nips:
+  shape: [2482, 2862, 14036, 17]
+  ranks: [10, 10, 10, 10]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, __half"
+  ]
+
+
+kinetic:
+  shape: [64, 12, 10, 60]
+  ranks: [10, 10, 10, 10]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, __half"
+  ]
+  
+
+uber:
+  shape: [183, 24, 1140, 1717]
+  ranks: [10, 10, 10, 10]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, __half"
+  ]
+  

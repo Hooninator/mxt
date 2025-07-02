@@ -5,7 +5,6 @@
 #include <thrust/device_ptr.h>
 
 #include "common.cuh"
-#include "Timer.hpp"
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

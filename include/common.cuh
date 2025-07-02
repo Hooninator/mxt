@@ -30,6 +30,8 @@
 
 #include <omp.h>
 
+#include "Profiler.hpp"
+
 #define DEBUG 0
 #define DEBUG_SPTTMC_KERNEL 0
 
@@ -51,6 +53,7 @@ std::ofstream logfile;
 cusolverDnHandle_t cusolverdn_handle;
 cublasHandle_t cublas_handle;
 cusparseHandle_t cusparse_handle;
+Profiler * profiler;
 
 } //globals
 
@@ -64,6 +67,9 @@ void mxt_init()
     (cusolverDnCreate(&globals::cusolverdn_handle));
     (cublasCreate(&globals::cublas_handle));
     (cusparseCreate(&globals::cusparse_handle));
+
+    globals::profiler = new Profiler();
+
 }
 
 
@@ -77,6 +83,9 @@ void mxt_finalize()
     (cusolverDnDestroy(globals::cusolverdn_handle));
     (cublasDestroy(globals::cublas_handle));
     (cusparseDestroy(globals::cusparse_handle));
+
+
+    delete globals::profiler;
 }
 
 } //mxt

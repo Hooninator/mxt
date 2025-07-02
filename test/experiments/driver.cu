@@ -1,5 +1,6 @@
 
 #include "mxt.cuh"
+#include "Config.hpp"
 
 #include <map>
 #include <string>
@@ -7,22 +8,8 @@
 using namespace mxt;
 
 
-template <typename InputModes, typename TuckerRanks, typename HighU, typename LowU, typename LraU, typename CoreTensorU, typename Idx>
-struct Config
-{
-    using InputModes_t = InputModes;
-    using TuckerRanks_t = TuckerRanks;
-    using HighU_t = HighU;
-    using LowU_t = LowU;
-    using CoreTensorU_t = CoreTensorU;
-    using LraU_t = LraU;
-    using Idx_t = Idx;
-
-    static constexpr uint32_t Order = InputModes_t::dims.size();
-};
-
 template <typename Conf>
-void run_tensor(std::string& path)
+void run_trial(std::string& path)
 {
     using SparseTensor_t = SparseTensor<typename Conf::HighU_t, typename Conf::LowU_t, typename Conf::Idx_t, Conf::Order, typename Conf::InputModes_t>;
 
@@ -31,9 +18,12 @@ void run_tensor(std::string& path)
     utils::print_separator("Done IO");
 
 
-    utils::print_separator("Beginning Tucker");
 
+    utils::print_separator("Beginning Tucker");
+    globals::profiler->start_timer("hooi");
     auto tucker_X = mixed_sparse_hooi<SparseTensor_t, typename Conf::CoreTensorU_t, typename Conf::LraU_t, typename Conf::TuckerRanks_t>(X, "randn", 5);
+    globals::profiler->stop_timer("hooi");
+    globals::profiler->print_timer("hooi");
     utils::print_separator("Done Tucker");
 
 
@@ -42,10 +32,18 @@ void run_tensor(std::string& path)
 
     std::ofstream core_file;
     core_file.open("core.out");
-
     tucker_X.dump_core(core_file);
-
     core_file.close();
+}
+
+
+template <typename Conf>
+void run(std::string& path)
+{
+    for (uint32_t t = 0; t < 1; t++)
+    {
+        run_trial<Conf>(path);
+    }
 }
 
 
@@ -90,23 +88,23 @@ int main(int argc, char ** argv)
 
     if (tensor.compare("nips")==0)
     {
-        run_tensor<NipsTns>(path);
+        run<NipsTns>(path);
     }
     else if (tensor.compare("crime")==0)
     {
-        run_tensor<ChicagoCrime>(path);
+        run<ChicagoCrime>(path);
     }
     else if (tensor.compare("randn3")==0)
     {
-        run_tensor<Randn3Tns>(path);
+        run<Randn3Tns>(path);
     }
     else if (tensor.compare("randn4")==0)
     {
-        run_tensor<Randn4Tns>(path);
+        run<Randn4Tns>(path);
     }
     else if (tensor.compare("randn5")==0)
     {
-        run_tensor<Randn5Tns>(path);
+        run<Randn5Tns>(path);
     }
     else
     {

@@ -2,6 +2,7 @@
 #include "mxt.cuh"
 #include "linalg/norms.cuh"
 #include "linalg/geam.cuh"
+#include "Config.hpp"
 
 #include <map>
 #include <string>
@@ -11,20 +12,6 @@
 
 
 using namespace mxt;
-
-template <typename InputModes, typename TuckerRanks, typename HighU, typename LowU, typename LraU, typename CoreTensorU, typename Idx>
-struct Config
-{
-    using InputModes_t = InputModes;
-    using TuckerRanks_t = TuckerRanks;
-    using HighU_t = HighU;
-    using LowU_t = LowU;
-    using CoreTensorU_t = CoreTensorU;
-    using LraU_t = LraU;
-    using Idx_t = Idx;
-
-    static constexpr uint32_t Order = InputModes_t::dims.size();
-};
 
 
 static const char * base = "../test/correctness/fst_cases/";
