@@ -129,7 +129,7 @@ SparseTensor_t read_tensor_frostt(const char * fpath)
         vals.push_back(val);
     }
 
-    SparseTensor_t tensor(inds, vals);
+    SparseTensor_t tensor(std::move(inds), std::move(vals));
     return tensor;
 }
 

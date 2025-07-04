@@ -17,7 +17,9 @@
 #if DEBUG >= 1
 #define DEBUG_PRINT(msg, ...) \
     do { \
-        std::printf("%s:%d -- ", __FILE__, __LINE__); \
+        std::string filename = std::string(__FILE__);\
+        std::string relpath = filename.substr(filename.find_last_of("/")+1, filename.size());\
+        std::printf("[%s]: %d -- ", relpath.c_str(), __LINE__); \
         std::printf(msg "\n", ##__VA_ARGS__); \
         std::flush(std::cout);\
     } while (0)
@@ -224,7 +226,9 @@ struct round_functor
             }
             if constexpr(std::is_same<T2, double>::value)
             {
-                return (double)(__half2float(x));
+                float x_f = __half2float(x);
+                double x_d = static_cast<double>(x_f);
+                return x_d;
             }
         }
     }

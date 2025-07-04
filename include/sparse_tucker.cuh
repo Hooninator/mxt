@@ -119,8 +119,10 @@ struct TuckerTensor
             CUDA_CHECK(cudaMalloc(&d_core, sizeof(CoreValueType_t) * Rn));
         }
 
+#if DEBUG >= 2
         utils::write_d_arr(globals::logfile, d_U_core, InputModes[Order - 1] * TuckerRanks[Order - 1], "d_U_core");
         utils::write_d_arr(globals::logfile, d_Y_n, InputModes[Order - 1] * (Rn / TuckerRanks[Order - 1]), "d_Y_n");
+#endif
 
         /* d_Y_n contains X_n (U_N x ... U_1), so we only need to compute U_n^T d_Y_n
          * but since it's stored in row major order, we actually need to compute 
@@ -200,13 +202,25 @@ struct TuckerTensor
         InputValueType_t * h_vals = utils::d2h_cpy(X.get_d_vals(), X.get_nnz());
         Index_t * h_inds = utils::d2h_cpy(X.get_d_inds(), X.get_nnz());
 
-        CoreValueType_t * h_core = utils::d2h_cpy(d_core, Rn);
+        InputValueType_t * d_core_high = utils::d_to_u<CoreValueType_t, InputValueType_t>(d_core, Rn);
+        InputValueType_t * h_core = utils::d2h_cpy(d_core_high, Rn);
 
-        std::vector<FactorValueType_t *> h_factors(Order);
+        CUDA_FREE(d_core_high);
+
+        std::vector<InputValueType_t *> h_factors(Order);
         for (uint32_t n = 0; n < Order; n++)
         {
-            h_factors[n] = utils::d2h_cpy(factors[n], InputModes[n] * TuckerRanks[n]);
+            InputValueType_t * d_factor_high = utils::d_to_u<FactorValueType_t, InputValueType_t>(factors[n], InputModes[n] * TuckerRanks[n]);
+
+            if (n==0)
+            {
+                linalg::dgmm_inplace(d_factor_high, X.get_d_scaling_matrix_inv(), TuckerRanks[0], InputModes[0], CUBLAS_SIDE_RIGHT);
+            }
+
+            h_factors[n] = utils::d2h_cpy(d_factor_high, InputModes[n] * TuckerRanks[n]);
+            CUDA_FREE(d_factor_high);
         }
+
 
         #pragma omp parallel for reduction(+:err)
         for (size_t j = 0; j < X.get_nnz(); j++)
@@ -214,17 +228,17 @@ struct TuckerTensor
             InputValueType_t X_val = h_vals[j];
             Index_t X_idx = h_inds[j];
 
-            double X_approx = 0;
+            InputValueType_t X_approx = 0;
             for (size_t r = 0; r < Rn; r++)
             {
-                double elem = 1;
+                InputValueType_t elem = 1;
                 Index_t G_idx = multidx(r, TuckerRanks);
 
                 for (uint32_t n = 0; n < Order; n++)
                 {
-                    elem *= (InputValueType_t)h_factors[n][X_idx[n] * TuckerRanks[n] + G_idx[n]];
+                    elem *= h_factors[n][X_idx[n] * TuckerRanks[n] + G_idx[n]];
                 }
-                elem *= (InputValueType_t)h_core[r];
+                elem *= h_core[r];
                 X_approx += elem;
             }
 
@@ -267,6 +281,12 @@ struct TuckerTensor
 };
 
 
+
+
+
+
+
+
 template <typename SparseTensor_t, typename CoreTensor_t, typename Lra_t, typename TuckerShape>
 TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(SparseTensor_t& X, const char * init, const size_t maxiters, const char * factors_dir = nullptr)
 {
@@ -283,8 +303,14 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
 
     TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> X_tucker(init, factors_dir);
     std::vector<double> core_norms;
-    TTMc_t * d_X_vals = X.get_d_vals_low();
 
+
+    /* Scaling */
+    X.apply_scaling(true);
+
+
+    /* Stuff from the input tensor */
+    TTMc_t * d_X_vals = X.get_d_vals_low();
     Index_t * d_X_inds = X.get_d_inds();
     IndexType_t * d_X_colinds = X.get_d_colinds();
     IndexType_t * d_X_rowptrs = X.get_d_rowptrs();
@@ -292,7 +318,8 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     cusparseSpMatDescr_t X_cusparse_descr = X.get_cusparse_descr();
     const size_t nnz = X.get_nnz();
 
-    /* Workspace for storing TTMc output */
+
+    /* Workspaces */
     static constexpr IndexType_t largest_mode = *(std::max_element(InputModes.begin(), InputModes.end()));
     static constexpr IndexType_t largest_rank = *(std::max_element(TuckerRanks.begin(), TuckerRanks.end()));
     static constexpr IndexType_t Rn = std::reduce(TuckerRanks.begin(), TuckerRanks.end(), 1, std::multiplies<IndexType_t>{});
@@ -305,6 +332,11 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
 
     DeviceWorkspace<CoreTensor_t> factor_core_ws(largest_mode * largest_rank); 
     CoreTensor_t * d_U_core = factor_core_ws.d_data;
+
+    DeviceWorkspace<Lra_t> d_scaling_matrix_ws(InputModes[0]);
+    utils::d_to_u<ValueType_t, Lra_t>(X.get_d_scaling_matrix(), d_scaling_matrix_ws.d_data, InputModes[0]);
+    Lra_t * d_scaling_matrix = d_scaling_matrix_ws.d_data;
+
 
     /* Symbolic TTMc -- record indices of all nonzeros that contribute to each row of the TTMc outputs 
      * Each entry of this array is a device pointer
@@ -319,10 +351,13 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
     }
 #endif
 
+
     /* Main Loop */
     for (size_t iter = 0; iter < maxiters; iter++)
     {
+
         std::cout<<"\tIteration "<<iter<<std::endl;
+
         [&]<std::size_t... Is>(std::index_sequence<Is...>)
         {
         ((
@@ -331,18 +366,21 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
             kernels::spttmc<TTMc_t, Lra_t, CoreTensor_t, IndexType_t, Index_t, N, InputShape, TuckerShape, Is>
                            (d_X_vals, d_X_inds, d_U_list, symbolic_ttmc, d_Y_n, d_Y_moden, nnz),
             globals::profiler->stop_timer("ttmc"),
+
 #if DEBUG >= 2
             utils::write_d_arr(globals::logfile, d_Y_n, InputModes[Is] * (Rn / TuckerRanks[Is]), "TTMc output"),
 #endif
+
             /* Update U[n] with truncated SVD */
             globals::profiler->start_timer("svd"),
-            linalg::llsv_svd_cusolver<Lra_t, CoreTensor_t, TTMc_t, IndexType_t, (Rn / TuckerRanks[Is]), InputModes[Is], TuckerRanks[Is], (Is==(N-1))>
-                                         (d_Y_n, d_U_list[Is], d_U_core),
+            linalg::llsv_svd_cusolver<Lra_t, CoreTensor_t, TTMc_t, IndexType_t, (Rn / TuckerRanks[Is]), InputModes[Is], TuckerRanks[Is]>
+                                         (d_Y_n, d_U_list[Is], d_U_core, d_scaling_matrix, Is, Is==N-1),
             globals::profiler->stop_timer("svd")
-#if DEBUG >= 1
-            ,
-            utils::write_d_arr(globals::logfile, d_U_list[Is], InputModes[Is] * TuckerRanks[Is], "Updated Factor Matrix")
+
+#if DEBUG >= 2
+            ,utils::write_d_arr(globals::logfile, d_U_list[Is], InputModes[Is] * TuckerRanks[Is], "Updated Factor Matrix")
 #endif
+
          ), ...);
         }(std::make_index_sequence<N>{});
 
@@ -364,6 +402,9 @@ TuckerTensor<SparseTensor_t, CoreTensor_t, TuckerShape> mixed_sparse_hooi(Sparse
         /* Clear spttmc_out_ws */
         spttmc_out_ws.zero();
     }
+
+    /* Reverse scaling for the input */
+    X.apply_scaling(false);
 
     return X_tucker;
 }

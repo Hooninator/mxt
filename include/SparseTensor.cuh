@@ -24,47 +24,47 @@ public:
     using Index_t = std::array<IndexType_t, Order>;
 
     static constexpr Index_t Modes = Shape::dims;
+    static constexpr size_t In = std::reduce(Modes.begin(), Modes.end(), 1, std::multiplies<IndexType_t>{});
+
     using ShapeType_t = Shape;
 
 
     SparseTensor(){}
 
-    SparseTensor(std::vector<Index_t>& inds, std::vector<ValueType_t>& vals):
-        nnz(inds.size())
+    SparseTensor(std::vector<Index_t>&& inds, std::vector<ValueType_t>&& vals):
+        h_inds(std::move(inds)), h_vals(std::move(vals)), h_scaling_matrix(Modes[0], 0), h_scaling_matrix_inv(Modes[0], 0)
     {
-        ASSERT( (inds.size() == vals.size()), "Number of indices %zu is not equal to number of nonzeros %zu", inds.size(), vals.size() ); 
+        ASSERT( (h_inds.size() == h_vals.size()), "Number of indices %zu is not equal to number of nonzeros %zu", h_inds.size(), h_vals.size() ); 
 
-        sort_inds_vals(std::move(inds), std::move(vals));
+        nnz = h_inds.size();
 
-        for (size_t i = 0; i<nnz; i++)
-        {
-            indmap[inds[i]] = i;
-        }
+        init_scaling_inf();
 
-        d_inds = utils::h2d_cpy(inds);
-        d_vals = utils::h2d_cpy(vals);
+        d_inds = utils::h2d_cpy(h_inds);
+        d_vals = utils::h2d_cpy(h_vals);
         d_vals_low = utils::d_to_u<ValueType_t, ValueTypeLow_t>(d_vals, nnz);
     }
 
 
-    void sort_inds_vals(std::vector<Index_t>&& inds, std::vector<ValueType_t>&& vals)
+    void sort_inds_vals()
     {
         std::vector<IndexType_t> sort_inds(nnz);
         std::iota(sort_inds.begin(), sort_inds.end(), 0);
 
-        std::sort(sort_inds.begin(), sort_inds.end(), [&](auto i, auto k) {return std::lexicographical_compare(inds[i].begin(), inds[i].end(), inds[k].begin(), inds[k].end());});
+        std::sort(sort_inds.begin(), sort_inds.end(), 
+                    [&](auto i, auto k) {return std::lexicographical_compare(h_inds[i].begin(), h_inds[i].end(), h_inds[k].begin(), h_inds[k].end());});
 
         std::vector<Index_t> sorted_inds(nnz);
         std::vector<ValueType_t> sorted_vals(nnz);
 
         for (size_t i = 0; i<nnz; i++)
         {
-            sorted_inds[i] = inds[sort_inds[i]];
-            sorted_vals[i] = vals[sort_inds[i]];
+            sorted_inds[i] = h_inds[sort_inds[i]];
+            sorted_vals[i] = h_vals[sort_inds[i]];
         }
 
-        inds = std::move(sorted_inds);
-        vals = std::move(sorted_vals);
+        h_inds = std::move(sorted_inds);
+        h_vals = std::move(sorted_vals);
     }
 
 
@@ -93,6 +93,48 @@ public:
                                          utils::to_cusparse_idx<IndexType_t>(),
                                          CUSPARSE_INDEX_BASE_ZERO,
                                          utils::to_cuda_dtype<ValueType_t>()));
+    }
+
+
+    void init_scaling_inf()
+    {
+        CUDA_CHECK(cudaMalloc(&d_scaling_matrix, sizeof(ValueType_t) * Modes[0]));
+        CUDA_CHECK(cudaMalloc(&d_scaling_matrix_inv, sizeof(ValueType_t) * Modes[0]));
+
+        for (size_t i=0; i<nnz; i++)
+        {
+            IndexType_t ridx = h_inds[i][0];
+            h_scaling_matrix[ridx] = std::max(h_vals[i], h_scaling_matrix[ridx]);
+        }
+
+        for (size_t i=0; i<Modes[0]; i++)
+        {
+            if (h_scaling_matrix[i] == 0)
+            {
+                h_scaling_matrix[i] = 1;
+            }
+        }
+
+
+        std::transform(h_scaling_matrix.begin(), h_scaling_matrix.end(), h_scaling_matrix_inv.begin(), 
+                        [](auto& elem) {return 1/elem;});
+
+        utils::h2d_cpy(d_scaling_matrix, h_scaling_matrix.data(), Modes[0]);
+        utils::h2d_cpy(d_scaling_matrix_inv, h_scaling_matrix_inv.data(), Modes[0]);
+    }
+
+
+    void apply_scaling(bool inv)
+    {
+        // This is slow for now
+        for (size_t i = 0; i<nnz; i++)
+        {
+            IndexType_t ridx = h_inds[i][0];
+            h_vals[i] = h_vals[i] * ( (inv) ? (h_scaling_matrix_inv[ridx]) : h_scaling_matrix[ridx] );
+        }
+
+        utils::h2d_cpy(d_vals, h_vals.data(), nnz);
+        utils::d_to_u<ValueType_t, ValueTypeLow_t>(d_vals, d_vals_low, nnz);
     }
 
 
@@ -171,10 +213,14 @@ public:
         CUDA_FREE(d_vals);
         CUDA_FREE(d_inds);
         CUDA_FREE(d_vals_low);
+        CUDA_FREE(d_scaling_matrix);
+        CUDA_FREE(d_scaling_matrix_inv);
     }
 
 
     inline ValueType_t * get_d_vals() {return d_vals;}
+    inline ValueType_t * get_d_scaling_matrix() {return d_scaling_matrix;}
+    inline ValueType_t * get_d_scaling_matrix_inv() {return d_scaling_matrix_inv;}
     inline ValueTypeLow_t * get_d_vals_low() {return d_vals_low;}
     inline Index_t * get_d_inds() {return d_inds;}
     inline IndexType_t * get_d_colinds() {return d_colinds;}
@@ -184,8 +230,6 @@ public:
 
 
 private:
-    
-
 
     struct IndexHash
     {
@@ -201,12 +245,20 @@ private:
         }
     };
 
+    std::vector<ValueType_t> h_vals;
+    std::vector<Index_t> h_inds;
+    std::vector<ValueType_t> h_scaling_matrix;
+    std::vector<ValueType_t> h_scaling_matrix_inv;
 
     ValueType_t * d_vals;
+    ValueType_t * d_scaling_matrix;
+    ValueType_t * d_scaling_matrix_inv;
     ValueTypeLow_t * d_vals_low;
     Index_t * d_inds;
+
     IndexType_t * d_colinds;
     IndexType_t * d_rowptrs;
+
     cusparseSpMatDescr_t cusparse_descr;
 
     std::unordered_map<Index_t, std::size_t, IndexHash> indmap;

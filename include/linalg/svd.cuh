@@ -6,6 +6,7 @@
 #include "kernels/transpose.cuh"
 #include "kernels/strided_copy.cuh"
 #include "linalg/geam.cuh"
+#include "linalg/dgmm.cuh"
 
 namespace mxt
 {
@@ -77,7 +78,6 @@ void llsv_randsvd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * 
     // Convert the output to row-major order and change precisions
     CUDA_CHECK(cudaMemcpy(d_U_lra, d_U_tmp, sizeof(ValueTypeIn) * N * K, cudaMemcpyDeviceToDevice));
     kernels::transpose_outplace<ValueTypeIn, ValueTypeOut, K, N>(d_U_lra, d_U);
-    //utils::write_d_arr(globals::logfile, d_U, N * K, "Temporary");
 
     // If we want the output of the lra, convert the thing we just transposed to the right precision
     if constexpr (KeepLra)
@@ -198,9 +198,16 @@ void llsv_jacobi_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeIn * d
 }
 
 
-template <typename ValueTypeIn, typename ValueTypeCore, typename ValueTypeOut, typename IndexType, size_t M, size_t N, size_t K, bool KeepLra>
-void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeCore * d_U_core)
+template <typename ValueTypeIn, typename ValueTypeCore, typename ValueTypeOut, typename IndexType, size_t M, size_t N, size_t K>
+void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeCore * d_U_core, ValueTypeIn * d_scaling_matrix, size_t mode, bool keep_lra)
 {
+
+    /* Handle scaling */
+    if (mode == 0)
+    {
+        linalg::dgmm_inplace(d_A, d_scaling_matrix, M, N, CUBLAS_SIDE_RIGHT);
+    }
+
     //TODO: if N > M, transpose
     constexpr bool transpose = (N > M);
     signed char jobu = transpose ? 'S' : 'N';
@@ -217,7 +224,9 @@ void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeCore * d_
         d_A_active = d_A_t;
     }
 
+#if DEBUG >= 2
     utils::write_d_arr(globals::logfile, d_A_active, M * N, "d_A_active");
+#endif
 
     size_t m = transpose ? N : M;
     size_t n = transpose ? M : N;
@@ -277,15 +286,27 @@ void llsv_svd_cusolver(ValueTypeIn * d_A, ValueTypeOut * d_U, ValueTypeCore * d_
 
     if constexpr (transpose)
     {
+
+        if (mode == 0)
+        {
+            linalg::dgmm_inplace(d_U_tmp, d_scaling_matrix, m, std::min(m, n), CUBLAS_SIDE_LEFT); 
+        }
+
         utils::d_to_u<ValueTypeIn, ValueTypeCore>(d_U_tmp, d_U_core, N * K);
         linalg::transpose<ValueTypeCore, ValueTypeOut>(d_U_core, d_U, N, K);
     }
     else
     {
+
+        if (mode == 0)
+        {
+            linalg::dgmm_inplace(d_V_tmp, d_scaling_matrix, std::min(m, n), n, CUBLAS_SIDE_RIGHT); 
+        }
+
         kernels::strided_copy<ValueTypeIn, ValueTypeOut, K, N, std::min(M, N)>(d_V_tmp, d_U);
     }
 
-    if constexpr (KeepLra)
+    if (keep_lra)
     {
         utils::d_to_u<ValueTypeOut, ValueTypeCore>(d_U, d_U_core, N * K);
     }

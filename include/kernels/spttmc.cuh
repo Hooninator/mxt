@@ -40,21 +40,26 @@ __device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, Value
             s_d_matrix_rows[j + R0 + R1 + R2] = d_matrices[3][r_inds[3] * R3 + j];
     }
 
+    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
     __syncthreads();
 
     for (IndexType r0 = 0; r0 < R0; r0++)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
+        ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
         for (IndexType r1 = 0; r1 < R1; r1++)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
+            ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
             for (IndexType r2 = 0; r2 < R2; r2++)
             {
                 ValueTypeIn mat2val = s_d_matrix_rows[R0 + R1 + r2];
+                ValueTypeOut mat2valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat2val);
                 for (IndexType r3 = 0 + threadIdx.x; r3 < R3; r3 += blockDim.x)
                 {
                     ValueTypeIn mat3val = s_d_matrix_rows[R0 + R1 + R2 + r3];
-                    s_d_out[r3 + r2 * R3 + r1 * R2 * R1 + r0 * R1 * R2 * R3 ] += kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val * mat0val * mat1val * mat2val * mat3val);
+                    ValueTypeOut mat3valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat3val);
+                    s_d_out[r3 + r2 * R3 + r1 * R2 * R1 + r0 * R1 * R2 * R3 ] += (valo * mat0valo * mat1valo * mat2valo * mat3valo);
                 }
             }
         }
@@ -85,18 +90,23 @@ __device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, Value
             s_d_matrix_rows[j + R0 + R1] = d_matrices[2][r_inds[2] * R2 + j];
     }
 
+    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
     __syncthreads();
+
 
     for (IndexType r0 = 0; r0 < R0; r0++)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
+        ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
         for (IndexType r1 = 0; r1 < R1; r1++)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
+            ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
             for (IndexType r2 = 0 + threadIdx.x; r2 < R2; r2 += blockDim.x)
             {
                 ValueTypeIn mat2val = s_d_matrix_rows[R0 + R1 + r2];
-                s_d_out[r2 + r1 * R2 + r0 * R1 * R2 ] += kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val * mat0val * mat1val * mat2val);
+                ValueTypeOut mat2valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat2val);
+                s_d_out[r2 + r1 * R2 + r0 * R1 * R2 ] += valo * mat0valo * mat1valo * mat2valo;
             }
         }
     }
@@ -123,15 +133,18 @@ __device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, Value
             s_d_matrix_rows[j + R0] = d_matrices[1][r_inds[1] * R1 + j];
     }
 
+    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
     __syncthreads();
 
     for (IndexType r0 = 0; r0 < R0; r0++)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
+        ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
         for (IndexType r1 = 0 + threadIdx.x; r1 < R1; r1 += blockDim.x)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
-            s_d_out[r1 + r0 * R1] += kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val * mat0val * mat1val);
+            ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
+            s_d_out[r1 + r0 * R1] += (valo * mat0valo * mat1valo);
         }
     }
 

@@ -133,7 +133,7 @@ public:
         }
         else
         {
-            std::cout<<"["<<name<<"]: "<<active_timers[name_str]->elapsed<<"s"<<std::endl;
+            std::cout<<"\t["<<name<<"]: "<<active_timers[name_str]->elapsed<<"s"<<std::endl;
         }
     }
 

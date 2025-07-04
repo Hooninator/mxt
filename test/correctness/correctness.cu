@@ -14,7 +14,7 @@
 using namespace mxt;
 
 
-static const char * base = "../test/correctness/cases/";
+static const char * base = "../test/correctness/tensorly_cases/";
 
 
 template <typename Conf>
@@ -82,7 +82,7 @@ using ThreeD12031 = Config<Shape<100, 80, 60>,
 
 using Kinetic = Config<Shape<64, 12, 10, 60>, 
                         Shape<20, 6, 5, 20>,
-                        double, double, double, double,
+                        double, __half, float, float,
                         uint64_t>;
 
 
