@@ -11,7 +11,7 @@ using Conf0 = Config<Shape<2482,2862,14036,17>,
 
                 using Conf2 = Config<Shape<2482,2862,14036,17>,
                                                       Shape<10,10,10,10>,
-                                                      double, __half, float, __half,
+                                                      double, __half, float, float,
                                                       uint64_t>;
 
                 
