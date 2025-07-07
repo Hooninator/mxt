@@ -48,6 +48,41 @@ uint8_t lid()
 }
 
 
+
+template <typename I, size_t Dim, size_t N>
+__device__ 
+void block_multidx(I (&midx)[N])
+{
+    uint32_t tid = threadIdx.x;
+
+    #pragma unroll
+    for (size_t i = 0; i<N; i++)
+    {
+        midx[N - i - 1] = tid % Dim;
+        tid /= Dim;
+    }
+
+}
+
+
+template <typename I, size_t N>
+__device__
+void bdims(I (&arr)[N])
+{
+    unsigned int bdim_total = blockDim.x;
+    bdim_total = 8*sizeof(unsigned int) - __clz(bdim_total);
+    I val = 2 << ((bdim_total / N) - 1);
+
+    #pragma unroll
+    for (size_t i=0; i<N; i++)
+    {
+        arr[N - i - 1] = val;
+    }
+}
+
+
+
+
 __device__ __forceinline__
 uint8_t wid()
 {

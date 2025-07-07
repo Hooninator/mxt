@@ -3,6 +3,7 @@
 
 #include "common.cuh"
 #include "kernel_utils.cuh"
+#include "spttmc_schedule.cuh"
 #include "../SymbolicTTMC.cuh"
 #include "../Shape.cuh"
 
@@ -12,12 +13,14 @@ namespace mxt
 namespace kernels
 {
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2, auto R3>
-__device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2, auto R3, int BlockStride>
+__device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
 {
     const uint32_t tid = kernel_utils::tid_1d();
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
+
+    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
 
     if (wid == 0)
     {
@@ -40,22 +43,21 @@ __device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, Value
             s_d_matrix_rows[j + R0 + R1 + R2] = d_matrices[3][r_inds[3] * R3 + j];
     }
 
-    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
     __syncthreads();
 
-    for (IndexType r0 = 0; r0 < R0; r0++)
+    for (IndexType r0 = multidx[0]; r0 < R0; r0 += BlockStride)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
         ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
-        for (IndexType r1 = 0; r1 < R1; r1++)
+        for (IndexType r1 = multidx[1]; r1 < R1; r1 += BlockStride)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
             ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
-            for (IndexType r2 = 0; r2 < R2; r2++)
+            for (IndexType r2 = multidx[2]; r2 < R2; r2 += BlockStride)
             {
                 ValueTypeIn mat2val = s_d_matrix_rows[R0 + R1 + r2];
                 ValueTypeOut mat2valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat2val);
-                for (IndexType r3 = 0 + threadIdx.x; r3 < R3; r3 += blockDim.x)
+                for (IndexType r3 = multidx[3]; r3 < R3; r3 += BlockStride)
                 {
                     ValueTypeIn mat3val = s_d_matrix_rows[R0 + R1 + R2 + r3];
                     ValueTypeOut mat3valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat3val);
@@ -68,11 +70,13 @@ __device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, Value
 }
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2>
-__device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2, int BlockStride>
+__device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
 {
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
+
+    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
 
     if (wid == 0)
     {
@@ -90,19 +94,18 @@ __device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, Value
             s_d_matrix_rows[j + R0 + R1] = d_matrices[2][r_inds[2] * R2 + j];
     }
 
-    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
     __syncthreads();
 
 
-    for (IndexType r0 = 0; r0 < R0; r0++)
+    for (IndexType r0 = multidx[0]; r0 < R0; r0 += BlockStride)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
         ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
-        for (IndexType r1 = 0; r1 < R1; r1++)
+        for (IndexType r1 = multidx[1]; r1 < R1; r1 += BlockStride)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
             ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
-            for (IndexType r2 = 0 + threadIdx.x; r2 < R2; r2 += blockDim.x)
+            for (IndexType r2 = multidx[2]; r2 < R2; r2 += BlockStride)
             {
                 ValueTypeIn mat2val = s_d_matrix_rows[R0 + R1 + r2];
                 ValueTypeOut mat2valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat2val);
@@ -114,13 +117,15 @@ __device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, Value
 }
 
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1>
-__device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, int BlockStride>
+__device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
 {
 
     const uint32_t tid = kernel_utils::tid_1d();
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
+
+    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
 
     if (wid == 0)
     {
@@ -133,14 +138,13 @@ __device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, Value
             s_d_matrix_rows[j + R0] = d_matrices[1][r_inds[1] * R1 + j];
     }
 
-    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
     __syncthreads();
 
-    for (IndexType r0 = 0; r0 < R0; r0++)
+    for (IndexType r0 = multidx[0]; r0 < R0; r0 += BlockStride)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
         ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
-        for (IndexType r1 = 0 + threadIdx.x; r1 < R1; r1 += blockDim.x)
+        for (IndexType r1 = multidx[1]; r1 < R1; r1 += BlockStride)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
             ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
@@ -152,19 +156,19 @@ __device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, Value
 
     
 
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, typename MatNCols>
-__device__ void scaled_block_kprod(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeOut * s_d_out, ValueTypeIn * s_d_matrix_rows)
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, typename MatNCols, size_t BlockStride>
+__device__ void scaled_block_kprod(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeOut * s_d_out, ValueTypeIn * s_d_matrix_rows, IndexType * multidx)
 {
     static_assert(Order <= 5 && Order >= 3);
     static constexpr auto RArray = MatNCols::dims;
 
     // TODO: Index sequence?
     if constexpr (Order == 3)
-        scaled_block_krpod_o3<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1]>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out);
+        scaled_block_krpod_o3<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
     else if constexpr (Order == 4)
-        scaled_block_krpod_o4<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2]>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out);
+        scaled_block_krpod_o4<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
     else if constexpr (Order == 5)
-        scaled_block_krpod_o5<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], RArray[3]>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out);
+        scaled_block_krpod_o5<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], RArray[3], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
 
     __syncthreads();
 
@@ -172,7 +176,7 @@ __device__ void scaled_block_kprod(ValueTypeIn val, IndexType * r_inds, ValueTyp
 
 
 //TODO: Replace parameters with struct
-template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, size_t Smem, uint32_t Order, uint32_t Mode, typename MatNCols, size_t OutputNCols, size_t ActiveColSum>
+template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, typename Index, uint32_t Order, uint32_t Mode, typename MatNCols, size_t OutputNCols, size_t ActiveColSum, size_t BlockStride>
 __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices, size_t * d_Y_n_inds, size_t * d_Y_n_offsets, size_t * d_Y_mode_offsets, ValueTypeOut * d_out, const size_t nnz)
 {
     const uint32_t bid = blockIdx.x;
@@ -203,6 +207,10 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
     ValueTypeIn val;
     IndexType idx;
 
+
+    IndexType multidx[Order - 1];
+    kernel_utils::block_multidx<IndexType, BlockStride, Order - 1>(multidx);
+
     //TODO: It would be better if we could just read in one index and use arithmetic to figure out what the entries of r_inds should be
     //I think we can use r for this purpose
     SPTTMC_PRINT_T0("Beginning kprod, start index %lu, end index %lu", start_index, end_index);
@@ -220,8 +228,8 @@ __global__ void spttmc_kernel_v1(ValueTypeIn * d_vals, Index * d_inds, ValueType
         }
 
         /* Compute the scaled kronecker product of Order - 1 rows of the factor matrices if exclude, otherwise Order rows */
-        scaled_block_kprod<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, MatNCols>
-            (val, r_inds, d_matrices, s_d_Y_row, s_d_matrix_rows);
+        scaled_block_kprod<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, MatNCols, BlockStride>
+            (val, r_inds, d_matrices, s_d_Y_row, s_d_matrix_rows, multidx);
 
         __syncthreads();
     }
@@ -284,18 +292,10 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
     const IndexType OutputNRows = MatNRows[Mode];
 
     /* Grid configuration */
-    //TODO: Replace this with the scheduler thing
-    const uint32_t nblocks = static_cast<uint32_t>(OutputNRows);
-    static constexpr uint32_t tpb = 1024;
+    using Schedule = SpTTMCSchedule<Order, Mode, MatNRowsShape>; 
+    uint32_t nblocks = Schedule::NBlocks;
+    uint32_t tpb = Schedule::NThreads;
 
-    /* Shared memory */
-    //TODO: Make this portable between different kinds of GPUs
-    static constexpr size_t MaxSmem = 164 * 1024;
-
-    static_assert( OutputNCols * sizeof(ValueTypeIn) + ActiveColSum * sizeof(ValueTypeIn) <= MaxSmem );
-
-    // This should be enough for two blocks per SM, which will maximize occupancy
-    static constexpr size_t Smem = MaxSmem / 2;
 
     /* Remove excluded matrix from the list of matrices passed to the kernel */
     ValueTypeIn ** d_active_matrices = prune_matrices<ValueTypeIn, Order, Mode>(d_matrices);
@@ -303,7 +303,7 @@ void spttmc_impl(ValueTypeIn * d_vals, Index * d_inds, ValueTypeIn ** d_matrices
     DEBUG_PRINT("blocks: %u, threads: %u", nblocks, tpb);
 
     /* Call the kernel */
-    spttmc_kernel_v1<ValueTypeIn, ValueTypeOut, IndexType, Index, Smem, Order, Mode, ActiveMatNColsShape, OutputNCols, ActiveColSum>
+    spttmc_kernel_v1<ValueTypeIn, ValueTypeOut, IndexType, Index, Order, Mode, ActiveMatNColsShape, OutputNCols, ActiveColSum, Schedule::BlockStride>
         <<<nblocks, tpb>>>
         (d_vals, d_inds, 
          d_active_matrices, 

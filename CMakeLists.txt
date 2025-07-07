@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
 
-
 project(mxt LANGUAGES CXX C CUDA)
 
 set(CMAKE_CUDA_ARCHITECTURES "80") 
@@ -19,18 +18,6 @@ add_library(mxt src/sparse_tucker.cu)
 target_include_directories(mxt PUBLIC include)
 target_compile_options(mxt PRIVATE ${COMPILER_FLAGS})
 target_link_libraries(mxt PRIVATE MPI::MPI_CXX CUDA::cudart CUDA::cusparse CUDA::cublas CUDA::cusolver OpenMP::OpenMP_CXX)
-
-
-#macro(add_test name)
-#    add_executable(${name} test/${name}.cu)
-#    target_include_directories(${name} PUBLIC include)
-#    target_compile_options(${name} PRIVATE ${COMPILER_FLAGS})
-#    target_link_libraries(${name} PRIVATE MPI::MPI_CXX CUDA::cudart CUDA::cusparse CUDA::cublas CUDA::cusolver OpenMP::OpenMP_CXX)
-#endmacro()
-#
-#add_test(driver)
-#add_test(correctness)
-
 
 add_subdirectory(./fst ./fst)
 add_subdirectory(./test/experiments ./experiments)
