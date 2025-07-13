@@ -13,14 +13,22 @@ namespace mxt
 namespace kernels
 {
 
+template <typename ValueTypeIn, typename ValueTypeOut>
+__device__ __forceinline__
+ValueTypeOut o5_mixed_accum(ValueTypeIn x, ValueTypeIn u1, ValueTypeIn u2, ValueTypeIn u3, ValueTypeIn u4)
+{
+    ValueTypeIn accum;
+    accum = x * u1 * u2 * u3 * u4;
+    return kernel_utils::convert<ValueTypeIn, ValueTypeOut>(accum);
+}
+
+
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2, auto R3, int BlockStride>
-__device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
+__device__ void scaled_block_kprod_o5(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
 {
     const uint32_t tid = kernel_utils::tid_1d();
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
-
-    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
 
     if (wid == 0)
     {
@@ -48,20 +56,16 @@ __device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, Value
     for (IndexType r0 = multidx[0]; r0 < R0; r0 += BlockStride)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
-        ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
         for (IndexType r1 = multidx[1]; r1 < R1; r1 += BlockStride)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
-            ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
             for (IndexType r2 = multidx[2]; r2 < R2; r2 += BlockStride)
             {
                 ValueTypeIn mat2val = s_d_matrix_rows[R0 + R1 + r2];
-                ValueTypeOut mat2valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat2val);
                 for (IndexType r3 = multidx[3]; r3 < R3; r3 += BlockStride)
                 {
                     ValueTypeIn mat3val = s_d_matrix_rows[R0 + R1 + R2 + r3];
-                    ValueTypeOut mat3valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat3val);
-                    s_d_out[r3 + r2 * R3 + r1 * R2 * R1 + r0 * R1 * R2 * R3 ] += (valo * mat0valo * mat1valo * mat2valo * mat3valo);
+                    s_d_out[r3 + r2 * R3 + r1 * R2 * R1 + r0 * R1 * R2 * R3 ] += o5_mixed_accum<ValueTypeIn, ValueTypeOut>(val, mat0val, mat1val, mat2val, mat3val);
                 }
             }
         }
@@ -70,13 +74,21 @@ __device__ void scaled_block_krpod_o5(ValueTypeIn val, IndexType * r_inds, Value
 }
 
 
+template <typename ValueTypeIn, typename ValueTypeOut>
+__device__ __forceinline__
+ValueTypeOut o4_mixed_accum(ValueTypeIn x, ValueTypeIn u1, ValueTypeIn u2, ValueTypeIn u3)
+{
+    ValueTypeIn accum;
+    accum = x * u1 * u2 * u3;
+    return kernel_utils::convert<ValueTypeIn, ValueTypeOut>(accum);
+}
+
+
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, auto R2, int BlockStride>
-__device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
+__device__ void scaled_block_kprod_o4(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
 {
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
-
-    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
 
     if (wid == 0)
     {
@@ -100,16 +112,13 @@ __device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, Value
     for (IndexType r0 = multidx[0]; r0 < R0; r0 += BlockStride)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
-        ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
         for (IndexType r1 = multidx[1]; r1 < R1; r1 += BlockStride)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
-            ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
             for (IndexType r2 = multidx[2]; r2 < R2; r2 += BlockStride)
             {
                 ValueTypeIn mat2val = s_d_matrix_rows[R0 + R1 + r2];
-                ValueTypeOut mat2valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat2val);
-                s_d_out[r2 + r1 * R2 + r0 * R1 * R2 ] += valo * mat0valo * mat1valo * mat2valo;
+                s_d_out[r2 + r1 * R2 + r0 * R1 * R2 ] += o4_mixed_accum<ValueTypeIn, ValueTypeOut>(val, mat0val, mat1val, mat2val);
             }
         }
     }
@@ -117,15 +126,23 @@ __device__ void scaled_block_krpod_o4(ValueTypeIn val, IndexType * r_inds, Value
 }
 
 
+template <typename ValueTypeIn, typename ValueTypeOut>
+__device__ __forceinline__
+ValueTypeOut o3_mixed_accum(ValueTypeIn x, ValueTypeIn u1, ValueTypeIn u2)
+{
+    ValueTypeIn accum;
+    accum = x * u1 * u2;
+    return kernel_utils::convert<ValueTypeIn, ValueTypeOut>(accum);
+}
+
+
 template <typename ValueTypeIn, typename ValueTypeOut, typename IndexType, auto R0, auto R1, int BlockStride>
-__device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
+__device__ void scaled_block_kprod_o3(ValueTypeIn val, IndexType * r_inds, ValueTypeIn ** d_matrices, ValueTypeIn * s_d_matrix_rows, ValueTypeOut * s_d_out, IndexType * multidx)
 {
 
     const uint32_t tid = kernel_utils::tid_1d();
     const uint8_t wid = kernel_utils::wid();
     const uint8_t lid = kernel_utils::lid();
-
-    ValueTypeOut valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(val);
 
     if (wid == 0)
     {
@@ -143,12 +160,10 @@ __device__ void scaled_block_krpod_o3(ValueTypeIn val, IndexType * r_inds, Value
     for (IndexType r0 = multidx[0]; r0 < R0; r0 += BlockStride)
     {
         ValueTypeIn mat0val = s_d_matrix_rows[r0];
-        ValueTypeOut mat0valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat0val);
         for (IndexType r1 = multidx[1]; r1 < R1; r1 += BlockStride)
         {
             ValueTypeIn mat1val = s_d_matrix_rows[R0 + r1];
-            ValueTypeOut mat1valo = kernel_utils::convert<ValueTypeIn, ValueTypeOut>(mat1val);
-            s_d_out[r1 + r0 * R1] += (valo * mat0valo * mat1valo);
+            s_d_out[r1 + r0 * R1] += o3_mixed_accum<ValueTypeIn, ValueTypeOut>(val, mat0val, mat1val);
         }
     }
 
@@ -164,13 +179,11 @@ __device__ void scaled_block_kprod(ValueTypeIn val, IndexType * r_inds, ValueTyp
 
     // TODO: Index sequence?
     if constexpr (Order == 3)
-        scaled_block_krpod_o3<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
+        scaled_block_kprod_o3<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
     else if constexpr (Order == 4)
-        scaled_block_krpod_o4<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
+        scaled_block_kprod_o4<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
     else if constexpr (Order == 5)
-        scaled_block_krpod_o5<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], RArray[3], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
-
-    __syncthreads();
+        scaled_block_kprod_o5<ValueTypeIn, ValueTypeOut, IndexType, RArray[0], RArray[1], RArray[2], RArray[3], BlockStride>(val, r_inds, d_matrices, s_d_matrix_rows, s_d_out, multidx);
 
 }
 

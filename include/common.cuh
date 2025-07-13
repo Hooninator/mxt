@@ -31,8 +31,9 @@
 #include <omp.h>
 
 #include "Profiler.hpp"
+#include "colors.h"
 
-#define DEBUG 0
+#define DEBUG 1
 #define DEBUG_SPTTMC_KERNEL 0
 
 

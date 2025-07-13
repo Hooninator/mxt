@@ -1,6 +1,7 @@
 
 from yaml import load, Loader
 import os
+from datetime import datetime
 
 
 cmake_top = """
@@ -23,6 +24,11 @@ runner_top = """#!/usr/bin/bash
 
 export OMP_NUM_THREADS=64
 """
+
+def datetime_str():
+    now = datetime.now()
+    return now.strftime("%Y-%m-%d:%H")
+
 
 with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmakefile, open("../../build/run.sh", "w") as runner:
     yaml_txt = file.read()
@@ -65,7 +71,7 @@ with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmake
 
         runner.write(f"srun -n 1 -G 1 ./experiments/{tensor}\n")
         runner.write(f"srun -n 1 ./fst/fst ../tensors/{tensor}.tns {' '.join([str(s) for s in data[tensor]['ranks']])}\n")
-        runner.write(f"mkdir ../test/experiments/data/{tensor}\n")
-        runner.write(f"mv *.csv ../test/experiments/data/{tensor}\n")
-        runner.write(f"mv fst_err.out ../test/experiments/data/{tensor}\n")
+        runner.write(f"mkdir ../test/experiments/data/{datetime_str()}/{tensor}\n")
+        runner.write(f"mv *.csv ../test/experiments/data/{datetime_str()}/{tensor}\n")
+        runner.write(f"mv fst_err.out ../test/experiments/data/{datetime_str()}/{tensor}\n")
 

@@ -27,7 +27,7 @@ void parse_frostt_line(std::string& line, Index_t& idx, Value_t& val)
 
 
 template <typename T>
-T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N)
+T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N, const bool transpose=false)
 {
     std::ifstream infile;
     infile.open(fpath);
@@ -45,6 +45,11 @@ T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N)
 
     infile.close();
 
+    if (transpose)
+    {
+        utils::transpose(vals, N, M);
+    }
+
     T * d_vals = utils::h2d_cpy(vals, M * N);
     delete[] vals;
 
@@ -53,7 +58,7 @@ T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N)
 
 
 template <typename T, typename ShapeT>
-T * read_dense_tensor_frostt(const char * fpath)
+T * read_dense_tensor_frostt(const char * fpath, const bool natural_order=false)
 {
     std::ifstream infile;
     infile.open(fpath);
@@ -63,14 +68,23 @@ T * read_dense_tensor_frostt(const char * fpath)
     static constexpr size_t In = std::reduce(Dims.begin(), Dims.end(), 1, std::multiplies<size_t>{});
 
     T * vals = new T[In];
+    std::memset(vals, 0, sizeof(T)*In);
 
     std::string line;
+
+    // Skip first three lines
+    std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
+
     std::array<size_t, N> idx;
     size_t offset = 0;
+    T val;
     while (std::getline(infile, line))
     {
-        parse_frostt_line<std::array<size_t, N>, T, N>(line, idx, vals[offset]);
-        offset += 1;
+        parse_frostt_line<std::array<size_t, N>, T, N>(line, idx, val);
+        offset = (natural_order) ? utils::linear_index(Dims.data(), idx.data(), N) : offset + 1;
+        vals[offset] = val;
     }
 
     infile.close();
@@ -132,7 +146,6 @@ SparseTensor_t read_tensor_frostt(const char * fpath)
     SparseTensor_t tensor(std::move(inds), std::move(vals));
     return tensor;
 }
-
 
 
 } //io

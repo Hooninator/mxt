@@ -1,0 +1,106 @@
+#include "mxt.cuh"
+#include "Config.hpp"
+
+#include <map>
+#include <string>
+#include <sstream>
+#include <thrust/sort.h>
+#include <thrust/device_ptr.h>
+
+
+using namespace mxt;
+static const char * base = "../test/correctness/ttmc_golden/";
+
+
+template <typename Conf>
+void run_correctness(std::string& path, std::string& tensorname)
+{
+    using DenseTensor_t = DenseTensor<typename Conf::HighU_t, typename Conf::InputModes_t>;
+    using MatrixCollection_t = MatrixCollection<typename Conf::LowU_t, typename Conf::TuckerRanks_t, typename Conf::InputModes_t>;
+    using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename MatrixCollection_t::RowShape_t>;
+
+    utils::print_separator("Beginning IO");
+    DenseTensor_t X(path.c_str()); 
+    utils::print_separator("Done IO");
+
+    std::string golden_dir = std::string(base);
+    golden_dir.append(tensorname);
+    golden_dir.append("/");
+
+    MatrixCollection_t matrices(golden_dir.c_str());
+
+    utils::print_separator("Beginning TTMc");
+    OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t>(X, matrices);
+    utils::print_separator("Done TTMc");
+
+    /* Correctness check */
+    std::string correct_output = golden_dir + "output.tns";
+    OutputDenseTensor_t Y_correct(correct_output.c_str());
+    bool correct = Y == Y_correct;
+
+    if (correct)
+    {
+        std::cout<<GREEN<<"Correctness passed!"<<RESET<<std::endl;
+    }
+    else
+    {
+        std::cout<<RED<<"Correctness failed"<<RESET<<std::endl;
+    }
+}
+
+
+using Kinetic = Config<Shape<64, 12, 10, 60>, 
+                        Shape<20, 6, 5, 20>,
+                        double, double, double, double,
+                        uint64_t>;
+
+
+using SmallDense = Config<Shape<3, 3, 3>, 
+                     Shape<2,2,2>, 
+                     double, double, double, double, 
+                     uint64_t>;
+
+
+using IndianPines = Config<Shape<145, 145, 200>, 
+                        Shape<20, 20, 20>,
+                        double, double, double, double,
+                        uint64_t>;
+
+
+int main(int argc, char ** argv)
+{
+    if (argc < 2)
+    {
+        std::cerr<<"Usage: ./correctness <tensor_name>"<<std::endl;
+        std::abort();
+    }
+
+    std::string tensor = std::string(argv[1]);
+    std::stringstream ss;
+    ss<<"../tensors/"<<tensor<<".tns";
+    std::string path = ss.str();
+
+    mxt_init();
+
+    if (tensor.compare("kinetic")==0)
+    {
+        run_correctness<Kinetic>(path, tensor);
+    }
+    else if (tensor.compare("small_dense")==0)
+    {
+        run_correctness<SmallDense>(path, tensor);
+    }
+    else if (tensor.compare("indian_pines")==0)
+    {
+        run_correctness<IndianPines>(path, tensor);
+    }
+    else
+    {
+        std::cerr<<"Invalid tensor: "<<tensor<<std::endl;
+        std::abort();
+    }
+
+    mxt_finalize();
+
+    return 0;
+}

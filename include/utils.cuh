@@ -470,6 +470,36 @@ struct abs_functor
 
 };
 
+
+template <typename T>
+void transpose(T * d_data, size_t m, size_t n)
+{
+    T * d_data_t = new T[m*n];
+    for (int i=0; i<m; i++)
+    {
+        for (int j=0; j<n; j++)
+        {
+            d_data_t[j + i * n] = d_data[i + j * m];
+        }
+    }
+    std::memcpy(d_data, d_data_t, m * n * sizeof(T));
+    delete[] d_data_t;
+}
+
+
+
+size_t linear_index(const size_t * strides, const size_t * inds, size_t n)
+{
+    size_t ind = 0;
+    size_t stride = 1;
+    for (int i=0; i<n; i++)
+    {
+        ind += inds[i]*stride;
+        stride *= strides[i];
+    }
+    return ind;
+}
+
 }// utils
 }// mxt
 
