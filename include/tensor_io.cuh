@@ -57,6 +57,45 @@ T * read_matrix_frostt(const char * fpath, const size_t M, const size_t N, const
 }
 
 
+template <typename T>
+T * read_matrix_dns(const char * fpath, const size_t M, const size_t N, const bool transpose=false)
+{
+    std::ifstream infile;
+    infile.open(fpath);
+
+    T * vals = new T[M * N];
+
+    std::string line;
+
+    std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
+
+    T val;
+    std::array<size_t, 2> idx;
+    size_t offset = 0;
+    while (std::getline(infile, line))
+    {
+        val = std::stod(line);
+        idx = utils::multidx_reverse<2>(offset, {M, N});
+        vals[idx[0] + idx[1] * M] = val;
+        offset++;
+    }
+
+    infile.close();
+
+    if (transpose)
+    {
+        utils::transpose(vals, N, M);
+    }
+
+    T * d_vals = utils::h2d_cpy(vals, M * N);
+    delete[] vals;
+
+    return d_vals;
+}
+
+
 template <typename T, typename ShapeT>
 T * read_dense_tensor_frostt(const char * fpath, const bool natural_order=false)
 {
@@ -85,6 +124,48 @@ T * read_dense_tensor_frostt(const char * fpath, const bool natural_order=false)
         parse_frostt_line<std::array<size_t, N>, T, N>(line, idx, val);
         offset = (natural_order) ? utils::linear_index(Dims.data(), idx.data(), N) : offset + 1;
         vals[offset] = val;
+    }
+
+    infile.close();
+
+    T * d_vals = utils::h2d_cpy(vals, In);
+    delete[] vals;
+
+    return d_vals;
+}
+
+
+template <typename T, typename ShapeT>
+T * read_dense_tensor_dns(const char * fpath)
+{
+    std::ifstream infile;
+    infile.open(fpath);
+
+    static constexpr auto Dims = ShapeT::dims;
+    static constexpr size_t N = Dims.size();
+    static constexpr size_t In = std::reduce(Dims.begin(), Dims.end(), 1, std::multiplies<size_t>{});
+
+    T * vals = new T[In];
+    std::memset(vals, 0, sizeof(T)*In);
+
+    std::string line;
+
+    // Skip first three lines
+    std::getline(infile, line);
+    std::getline(infile, line);
+    std::getline(infile, line);
+
+    std::array<size_t, N> idx;
+    size_t offset1 = 0;
+    size_t offset2 = 0;
+    T val;
+    while (std::getline(infile, line))
+    {
+        val = std::stod(line);
+        idx = utils::multidx_reverse<Dims.size()>(offset1, Dims);
+        offset2 = utils::linear_index(Dims.data(), idx.data(), N);
+        vals[offset2] = val;
+        offset1++;
     }
 
     infile.close();

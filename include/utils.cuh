@@ -500,6 +500,31 @@ size_t linear_index(const size_t * strides, const size_t * inds, size_t n)
     return ind;
 }
 
+
+
+template <size_t N>
+std::array<size_t, N> multidx_natural(size_t idx, const std::array<size_t, N> dims)
+{
+    std::array<size_t, N> multidx;
+    for (int i=0; i<N; i++)
+    {
+        multidx[i] = idx % dims[i];
+        idx /= dims[i];
+    }
+    return multidx;
+}
+
+
+
+template <size_t N>
+std::array<size_t, N> multidx_reverse(size_t idx, std::array<size_t, N> dims)
+{
+    std::reverse(dims.begin(), dims.end());
+    std::array<size_t, N> multidx = multidx_natural<N>(idx, dims);
+    std::reverse(multidx.begin(), multidx.end());
+    return multidx;
+}
+
 }// utils
 }// mxt
 

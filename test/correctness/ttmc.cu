@@ -34,7 +34,7 @@ void run_correctness(std::string& path, std::string& tensorname)
     utils::print_separator("Done TTMc");
 
     /* Correctness check */
-    std::string correct_output = golden_dir + "output.tns";
+    std::string correct_output = golden_dir + "output.dns";
     OutputDenseTensor_t Y_correct(correct_output.c_str());
     bool correct = Y == Y_correct;
 
@@ -48,11 +48,6 @@ void run_correctness(std::string& path, std::string& tensorname)
     }
 }
 
-
-using Kinetic = Config<Shape<64, 12, 10, 60>, 
-                        Shape<20, 6, 5, 20>,
-                        double, double, double, double,
-                        uint64_t>;
 
 
 using SmallDense = Config<Shape<3, 3, 3>, 
@@ -77,16 +72,12 @@ int main(int argc, char ** argv)
 
     std::string tensor = std::string(argv[1]);
     std::stringstream ss;
-    ss<<"../tensors/"<<tensor<<".tns";
+    ss<<"../tensors/"<<tensor<<".dns";
     std::string path = ss.str();
 
     mxt_init();
 
-    if (tensor.compare("kinetic")==0)
-    {
-        run_correctness<Kinetic>(path, tensor);
-    }
-    else if (tensor.compare("small_dense")==0)
+    if (tensor.compare("small_dense")==0)
     {
         run_correctness<SmallDense>(path, tensor);
     }

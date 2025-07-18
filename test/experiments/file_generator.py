@@ -30,7 +30,7 @@ def datetime_str():
     return now.strftime("%Y-%m-%d:%H")
 
 
-with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmakefile, open("../../build/run.sh", "w") as runner:
+with open("./ttmc_configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmakefile, open("../../build/run.sh", "w") as runner:
     yaml_txt = file.read()
     data = load(yaml_txt, Loader=Loader)
 
@@ -39,26 +39,30 @@ with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmake
     runner.write(runner_top)
 
     for tensor in data:
+
         filename = f"{tensor}.cu"
-        shape = ','.join([str(s) for s in data[tensor]["shape"]])
-        ranks = ','.join([str(s) for s in data[tensor]["ranks"]])
+        shape = ','.join([str(s) for s in data[tensor]["rows"]])
+        ranks = ','.join([str(s) for s in data[tensor]["cols"]])
         configs = data[tensor]["configs"]
+
         with open(f"./{filename}", 'w') as file:
-            file.write('#include "run.cuh"\n')
+
+            file.write('#include "run_ttmc.cuh"\n')
             conf_strs = []
+
             for i in range(len(configs)):
-                conf_str = f"""using Conf{i} = Config<Shape<{shape}>,
+                conf_str = f"""using Conf{i} = TtmcConfig<Shape<{shape}>,
                                                       Shape<{ranks}>,
-                                                      double, {configs[i]},
-                                                      uint64_t>;
+                                                      double, {configs[i]}>;
 
                 """
                 file.write(conf_str)
                 conf_strs.append(f"Conf{i}")
+
             bottom = f"""
             int main(int argc, char ** argv)
             {{
-                std::string path("../tensors/{tensor}.tns");
+                std::string path("../tensors/{tensor}.dns");
                 mxt_init();
                 run<{','.join(conf_strs)}>(path);
                 mxt_finalize();
@@ -70,8 +74,7 @@ with open("./configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as cmake
         cmakefile.write(f"add_exp({tensor})\n")
 
         runner.write(f"srun -n 1 -G 1 ./experiments/{tensor}\n")
-        runner.write(f"srun -n 1 ./fst/fst ../tensors/{tensor}.tns {' '.join([str(s) for s in data[tensor]['ranks']])}\n")
         runner.write(f"mkdir ../test/experiments/data/{datetime_str()}/{tensor}\n")
         runner.write(f"mv *.csv ../test/experiments/data/{datetime_str()}/{tensor}\n")
-        runner.write(f"mv fst_err.out ../test/experiments/data/{datetime_str()}/{tensor}\n")
+        runner.write(f"mv *.tns ../test/experiments/data/{datetime_str()}/{tensor}\n")
 

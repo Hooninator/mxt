@@ -10,13 +10,13 @@ base = "../../tensors/"
 
 
 def read_tensor(config):
-    tensor = np.zeros(shape=config["shape"], order='F')
-    with open(f"{base}{config['name']}.tns", 'r') as file:
+    tensor = []
+    with open(f"{base}{config['name']}.dns", 'r') as file:
         for entry in file:
-            stuff = entry.split(" ")
-            inds = [int(s) - 1 for s in stuff[:-1]]
-            tensor[tuple(inds)] = float(stuff[-1])
-    return tensor
+            if entry.find(".")==-1:
+                continue
+            tensor.append(float(entry))
+    return np.ndarray(shape=config["shape"], buffer=np.array(tensor), order='C')
 
 
 
@@ -28,6 +28,17 @@ def write_tensor(filename, X):
             indices = inds[:, i] + 1
             line = ' '.join(str(idx) for idx in indices)
             file.write(f"{line} {X[tuple(inds[:, i])]:.18f}\n")
+
+
+def write_dns(filename, X):
+    with open(filename, 'w') as file:
+        vals = X.flatten(order='C')
+        file.write(f"{len(X.shape)}\n{' '.join([str(s) for s in X.shape])}\n{vals.size}\n")
+        for i in range(len(vals)):
+            if i % 10000==0:
+                print(f"Writing {i}/{len(vals)}")
+            file.write(f"{vals[i]:.18f}\n")
+
 
 
 def init_matrices(rows, cols):
@@ -54,14 +65,15 @@ if __name__ == "__main__":
                 os.mkdir(f"./ttmc_golden/{config['name']}")
 
             X = read_tensor(config)
-            print(X.flatten('F'))
+            print(X)
 
             U_list = init_matrices(config['ranks'], config['shape'])
             for i in range(len(U_list)):
-                write_tensor(f"./ttmc_golden/{config['name']}/matrix_{i}.tns", U_list[i])
+                print(U_list[i])
+                write_dns(f"./ttmc_golden/{config['name']}/matrix_{i}.dns", U_list[i])
 
             Y = tl.tenalg.multi_mode_dot(X, U_list)
-            write_tensor(f"./ttmc_golden/{config['name']}/output.tns", Y)
+            write_dns(f"./ttmc_golden/{config['name']}/output.dns", Y)
 
             print("~"*100)
 

@@ -26,6 +26,8 @@ public:
     static constexpr Index_t Modes = Shape::dims;
     static constexpr size_t In = std::reduce(Modes.begin(), Modes.end(), 1, std::multiplies<size_t>{});
 
+    DenseTensor(){}
+
 
     DenseTensor(T * d_data): 
         d_data(d_data)
@@ -34,7 +36,14 @@ public:
 
     DenseTensor(const char * fpath)
     {
-        d_data = io::read_dense_tensor_frostt<T, Shape_t>(fpath, true);
+        if (std::strstr(fpath, ".dns") != nullptr)
+        {
+            d_data = io::read_dense_tensor_dns<T, Shape_t>(fpath);
+        } 
+        else
+        {
+            d_data = io::read_dense_tensor_frostt<T, Shape_t>(fpath, true);
+        }
     }
 
 
@@ -91,9 +100,41 @@ public:
     }
 
 
-    void dump_logfile()
+    inline Index_t multidx_reverse(size_t idx)
     {
+        Index_t multidx;
+        size_t stride = In; 
+        int j = 0;
+        for (int i=Order-1; i>=0; i--)
+        {
+            stride /= Modes[i];
+            multidx[j++] = idx % stride;
+        }
+        return multidx;
+    }
 
+
+    void dump(std::ofstream& ofs)
+    {
+        T * h_data = utils::d2h_cpy(d_data, In);
+
+        for (size_t i=0; i<In; i++)
+        {
+            Index_t midx = multidx_reverse(i);
+            dump_midx(ofs, midx);
+            ofs<<h_data[i]<<"\n";
+        }
+
+        delete[] h_data;
+    }
+
+
+    void dump_midx(std::ofstream& ofs, Index_t& midx)
+    {
+        for (auto idx : midx)
+        {
+            ofs<<idx<<" ";
+        }
     }
 
 

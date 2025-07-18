@@ -1,0 +1,19 @@
+indian_pines:
+  rows: [145, 145, 200]
+  cols: [10, 10, 10]
+  configs: ["double", "float", "__half"]
+
+miranda:
+  rows: [256, 256, 2048]
+  cols: [10, 10, 10]
+  configs: ["double", "float", "__half"]
+
+evil:
+  rows: [100, 100, 100]
+  cols: [10, 10, 10]
+  configs: ["double", "float", "__half"]
+
+randn:
+  rows: [100, 100, 100, 100]
+  cols: [10, 10, 10, 10]
+  configs: ["double", "float", "__half"]

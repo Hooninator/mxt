@@ -3,6 +3,7 @@
 
 #include "common.cuh"
 #include "utils.cuh"
+#include "rand/rand_matrix.cuh"
 
 
 namespace mxt
@@ -39,6 +40,21 @@ public:
     }(std::make_index_sequence<N>{});
 
 
+    MatrixCollection()
+    {
+        CUDA_CHECK(cudaMalloc(&d_buf, Size*sizeof(T)));
+        CUDA_CHECK(cudaMemset(d_buf, 0, Size*sizeof(T)));
+        matrices.reserve(N);
+
+        size_t offset = 0;
+        for (int i=0; i<N; i++)
+        {
+            rand::randn_buffer_inplace(d_buf + offset, Rows[i] * Cols[i]);
+            offset += Rows[i] * Cols[i];
+        }
+    }
+
+
     MatrixCollection(const char * fpath)
     {
 
@@ -50,9 +66,9 @@ public:
         size_t offset = 0;
         for (int i=0; i<N; i++)
         {
-            std::string fpath_i = std::string(fpath) + "matrix_" + std::to_string(i) + ".tns";
+            std::string fpath_i = std::string(fpath) + "matrix_" + std::to_string(i) + ".dns";
 
-            T * d_matrix = io::read_matrix_frostt<T>(fpath_i.c_str(), Rows[i], Cols[i], true);
+            T * d_matrix = io::read_matrix_dns<T>(fpath_i.c_str(), Rows[i], Cols[i]);
 
             CUDA_CHECK(cudaMemcpy(d_buf + offset, d_matrix, sizeof(T) * Rows[i] * Cols[i], cudaMemcpyDeviceToDevice));
             CUDA_FREE(d_matrix);

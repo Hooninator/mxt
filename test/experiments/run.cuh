@@ -4,7 +4,7 @@
 #include <map>
 #include <string>
 
-#define NTRIALS 3
+#define NTRIALS 2
 
 #define CSV_PROFILING 0
 
