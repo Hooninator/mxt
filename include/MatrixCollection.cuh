@@ -42,6 +42,7 @@ public:
 
     MatrixCollection()
     {
+
         CUDA_CHECK(cudaMalloc(&d_buf, Size*sizeof(T)));
         CUDA_CHECK(cudaMemset(d_buf, 0, Size*sizeof(T)));
         matrices.reserve(N);
@@ -50,6 +51,7 @@ public:
         for (int i=0; i<N; i++)
         {
             rand::randn_buffer_inplace(d_buf + offset, Rows[i] * Cols[i]);
+            matrices[i] = d_buf + offset;
             offset += Rows[i] * Cols[i];
         }
     }

@@ -117,15 +117,35 @@ public:
     void dump(std::ofstream& ofs)
     {
         T * h_data = utils::d2h_cpy(d_data, In);
+        T * h_data_reverse = new T[In];
+        
+        ofs<<Order<<"\n";
+        for (int i=0; i<Order; i++)
+        {
+            ofs<<Modes[i];
+            if (i < Order - 1)
+            {
+                ofs<<" ";
+            }
+        }
+        ofs<<"\n";
+
+        ofs<<In<<"\n";
 
         for (size_t i=0; i<In; i++)
         {
-            Index_t midx = multidx_reverse(i);
-            dump_midx(ofs, midx);
-            ofs<<h_data[i]<<"\n";
+            Index_t midx = utils::multidx_reverse<Order>(i, Modes);
+            size_t r_idx = utils::linear_index(Modes.data(), midx.data(), Order);
+            h_data_reverse[r_idx] = h_data[i];
+        }
+
+        for (size_t i=0; i<In; i++)
+        {
+            ofs<<h_data_reverse[i]<<"\n";
         }
 
         delete[] h_data;
+        delete[] h_data_reverse;
     }
 
 

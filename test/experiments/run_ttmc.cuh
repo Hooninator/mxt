@@ -5,9 +5,9 @@
 #include <map>
 #include <string>
 
-#define NTRIALS 3
+#define NTRIALS 100
 
-#define CSV_PROFILING 0
+#define SAVE 1
 
 using namespace mxt;
 
@@ -16,9 +16,11 @@ template <typename Conf>
 void run_trial(std::string& path)
 {
 
-    using DenseTensor_t = DenseTensor<typename Conf::HighU_t, typename Conf::MatrixRows_t>;
-    using MatrixCollection_t = MatrixCollection<typename Conf::LowU_t, typename Conf::MatrixCols_t, typename Conf::MatrixRows_t>;
-    using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename MatrixCollection_t::RowShape_t>;
+    using DenseTensor_t = DenseTensor<typename Conf::HighU_t, typename Conf::MatrixCols_t>;
+    using MatrixCollection_t = MatrixCollection<typename Conf::LowU_t, typename Conf::MatrixRows_t, typename Conf::MatrixCols_t>;
+    using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename Conf::MatrixRows_t>;
+
+    static constexpr cublasComputeType_t ComputeType = Conf::ComputeType;
 
     size_t pos = path.find_last_of("/") + 1;
     std::string tensor_name = path.substr(pos, path.size() - pos);
@@ -32,25 +34,33 @@ void run_trial(std::string& path)
     MatrixCollection_t matrices;
 
 
+    utils::print_separator("Beginning TTMc");
     for (uint32_t t = 0; t < NTRIALS; t++)
     {
-        utils::print_separator("Beginning TTMc");
-        OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t>(X, matrices);
-        utils::print_separator("Done TTMc");
+        globals::profiler->start_timer("ttmc");
+        OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t>(X, matrices, ComputeType);
+        globals::profiler->stop_timer("ttmc");
 
+        if (t % 10 == 0)
+        {
+            globals::profiler->print_timer("ttmc");
+        }
+
+#if SAVE
         if (t == NTRIALS - 1)
         {
             std::ofstream y_file;
-            y_file.open(std::string(tensor_name + "_" + Conf::str() + "_output.tns"));
+            y_file.open(std::string(tensor_name + "_" + Conf::str() + "_output.dns"));
             Y.dump(y_file);
             y_file.close();
         }
-
-        globals::profiler->commit_timers();
+#endif
     }
+    utils::print_separator("Done TTMc");
 
+    globals::profiler->commit_timers();
 
-#if CSV_PROFILING
+#if SAVE
     std::string timer_csv_name("./" + tensor_name + "_" + Conf::str() + "_timings.csv");
     globals::profiler->timers_to_csv(timer_csv_name.c_str());
 #endif

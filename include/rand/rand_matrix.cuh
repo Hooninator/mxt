@@ -12,12 +12,13 @@ namespace mxt
 namespace rand
 {
 
-std::random_device rd;
-std::mt19937 gen(rd());
-
 template <typename ValueType, typename IndexType>
 void randn_buffer(ValueType ** d_data, IndexType n)
 {
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
 
     std::normal_distribution distr{0.0, 1.0};
 
@@ -31,8 +32,9 @@ void randn_buffer(ValueType ** d_data, IndexType n)
 
 
 template <typename ValueType>
-void randn_buffer_inplace(ValueType * d_data, const size_t n)
+void randn_buffer_inplace(ValueType * d_data, const size_t n, const size_t seed=1)
 {
+    std::mt19937 gen(seed);
 
     std::normal_distribution distr{0.0, 1.0};
 

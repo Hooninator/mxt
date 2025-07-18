@@ -1,4 +1,4 @@
-#include "run.cuh"
+#include "run_ttmc.cuh"
 using Conf0 = Config<Shape<100,80,60>,
                                                       Shape<10,8,6>,
                                                       double, double, double, double,

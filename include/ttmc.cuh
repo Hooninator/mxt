@@ -11,6 +11,8 @@
 namespace mxt
 {
 
+
+
 template <typename InputType1, typename InputType2, typename OutputType>
 void ttm_modek(InputType1 * d_X, InputType2 * d_U, OutputType * d_Y, 
                 const size_t m, const size_t n, const size_t k,
@@ -90,11 +92,12 @@ void ttm_mode1(InputType1 * d_X, InputType2 * d_U, OutputType * d_Y,
 
 
 template <typename InputTensor_t, typename MatrixCollection_t, typename OutputTensor_t>
-OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices)
+OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublasComputeType_t compute_type=CUBLAS_COMPUTE_64F)
 {
 
     using TensorType_t = InputTensor_t::ValueType_t;
     using MatrixType_t = MatrixCollection_t::ValueType_t;
+    using AccumType_t = MatrixType_t;
 
     static constexpr auto MatrixRows = MatrixCollection_t::Rows; 
     static constexpr auto MatrixCols = MatrixCollection_t::Cols; 
@@ -103,14 +106,13 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices)
     static constexpr size_t N = MatrixCollection_t::N;
 
     /* Scaling */
-    //TODO
     TensorType_t * d_X = X.d_data;
-    cublasComputeType_t compute_type = CUBLAS_COMPUTE_64F;
+    MatrixType_t * d_X_scaled = utils::d_to_u<TensorType_t, MatrixType_t>(d_X, InputTensor_t::In);
      
-
     /* Set up output tensor */
-    TensorType_t * d_Y_prev, * d_Y_curr;
-    //TODO: Replace sequence of mallocs and frees with one allocation up here
+    AccumType_t * d_Y_prev, * d_Y_curr, * d_Y_tmp;
+    CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0)));
+    CUDA_CHECK(cudaMalloc(&d_Y_tmp, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0))); //TODO: Overallocation
 
     /* TTM chain */
     for (int i = 0; i < N; i++)
@@ -129,18 +131,17 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices)
 
             y_size = m * n;
 
-            CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(TensorType_t) * y_size));
 
-
-            ttm_mode1(d_X, d_U, d_Y_curr, 
+            ttm_mode1(d_X_scaled, d_U, d_Y_curr, 
                       m, n, k, 
                       compute_type);
 
 
             d_Y_prev = d_Y_curr;
-            d_Y_curr = nullptr;
+            d_Y_curr = d_Y_tmp;
 
             TensorModes[0] = MatrixRows[0];
+            CUDA_FREE(d_X_scaled);
         }
         else
         {
@@ -161,7 +162,6 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices)
             size_t k = MatrixRows[i];
 
             y_size = m * k * p;
-            CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(TensorType_t) * y_size));
 
 
             ttm_modek(d_Y_prev, d_U, d_Y_curr, 
@@ -170,8 +170,7 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices)
                       compute_type);
 
 
-            CUDA_FREE(d_Y_prev);
-            d_Y_prev = d_Y_curr;
+            std::swap(d_Y_prev, d_Y_curr);
 
             TensorModes[i] = MatrixRows[i];
         }
@@ -180,8 +179,13 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices)
 
     }
 
+    TensorType_t * d_Y_final = utils::d_to_u<AccumType_t, TensorType_t>(d_Y_prev, OutputTensor_t::In);
+    OutputTensor_t Y(d_Y_final);
 
-    OutputTensor_t Y(d_Y_prev);
+    CUDA_FREE(d_Y_prev);
+    CUDA_FREE(d_Y_tmp);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
     return Y;
 }
 

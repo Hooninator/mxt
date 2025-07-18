@@ -1,5 +1,5 @@
 #include "mxt.cuh"
-#include "Config.hpp"
+#include "TtmcConfig.cuh"
 
 #include <map>
 #include <string>
@@ -15,9 +15,9 @@ static const char * base = "../test/correctness/ttmc_golden/";
 template <typename Conf>
 void run_correctness(std::string& path, std::string& tensorname)
 {
-    using DenseTensor_t = DenseTensor<typename Conf::HighU_t, typename Conf::InputModes_t>;
-    using MatrixCollection_t = MatrixCollection<typename Conf::LowU_t, typename Conf::TuckerRanks_t, typename Conf::InputModes_t>;
-    using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename MatrixCollection_t::RowShape_t>;
+    using DenseTensor_t = DenseTensor<typename Conf::HighU_t, typename Conf::MatrixCols_t>;
+    using MatrixCollection_t = MatrixCollection<typename Conf::LowU_t, typename Conf::MatrixRows_t, typename Conf::MatrixCols_t>;
+    using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename Conf::MatrixRows_t>;
 
     utils::print_separator("Beginning IO");
     DenseTensor_t X(path.c_str()); 
@@ -50,16 +50,14 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 
 
-using SmallDense = Config<Shape<3, 3, 3>, 
+using SmallDense = TtmcConfig<Shape<3, 3, 3>, 
                      Shape<2,2,2>, 
-                     double, double, double, double, 
-                     uint64_t>;
+                     double, double, CUBLAS_COMPUTE_64F>;
 
 
-using IndianPines = Config<Shape<145, 145, 200>, 
+using IndianPines = TtmcConfig<Shape<145, 145, 200>, 
                         Shape<20, 20, 20>,
-                        double, double, double, double,
-                        uint64_t>;
+                        double, double, CUBLAS_COMPUTE_64F>;
 
 
 int main(int argc, char ** argv)

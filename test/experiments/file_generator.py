@@ -74,7 +74,8 @@ with open("./ttmc_configs.yaml", "r") as file, open("./CMakeLists.txt", "w") as 
         cmakefile.write(f"add_exp({tensor})\n")
 
         runner.write(f"srun -n 1 -G 1 ./experiments/{tensor}\n")
+        runner.write(f"mkdir ../test/experiments/data/{datetime_str()}\n")
         runner.write(f"mkdir ../test/experiments/data/{datetime_str()}/{tensor}\n")
         runner.write(f"mv *.csv ../test/experiments/data/{datetime_str()}/{tensor}\n")
-        runner.write(f"mv *.tns ../test/experiments/data/{datetime_str()}/{tensor}\n")
+        runner.write(f"mv *.dns ../test/experiments/data/{datetime_str()}/{tensor}\n")
 
