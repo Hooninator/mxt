@@ -6,6 +6,8 @@
 #include <sstream>
 #include <iostream>
 
+#include "MatrixCollection.cuh"
+
 namespace mxt
 {
 
@@ -19,7 +21,7 @@ std::string get_type()
 }
 
 
-template <typename MatrixCols, typename MatrixRows, typename HighU, typename LowU, int ComputeTypeT>
+template <typename MatrixCols, typename MatrixRows, typename HighU, typename LowU, int ComputeTypeT, int GenTypeT>
 struct TtmcConfig
 {
     using MatrixCols_t = MatrixCols;
@@ -31,6 +33,7 @@ struct TtmcConfig
 
     static constexpr uint32_t Order = MatrixCols_t::dims.size();
     static constexpr cublasComputeType_t ComputeType = static_cast<cublasComputeType_t>(ComputeTypeT);
+    static constexpr MatrixGenerator_t Generator = static_cast<MatrixGenerator_t>(GenTypeT);
 
     inline static const std::map<const int, std::string> compute_type_map
     {
@@ -40,28 +43,62 @@ struct TtmcConfig
         {CUBLAS_COMPUTE_16F, "compute16f"}
     };
 
+
+    inline static const std::map<const int, std::string> gen_type_map
+    {
+        {GEN_SMALL, "gen_small"},
+        {GEN_RANDN, "gen_randn"},
+        {GEN_BIG, "gen_big"}
+    };
+
+
     static void print(const std::string& tensor)
     {
         std::cout<<"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"<<std::endl;
         std::cout<<"\tTENSOR: "<<tensor<<std::endl;
-        std::cout<<"\tINPUT PRECISION: "<<get_type<HighU_t>()<<std::endl;
+        std::cout<<"\tMATRIX ROWS: "<<rows_str()<<std::endl;
         std::cout<<"\tLOW PRECISION: "<<get_type<LowU_t>()<<std::endl;
         std::cout<<"\tCOMPUTE TYPE: "<<compute_type()<<std::endl;
+        std::cout<<"\tMATRIX GENERATION TYPE: "<<gen_type()<<std::endl;
         std::cout<<"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"<<std::endl;
     }
 
 
     static std::string str()
     {
-        return get_type<LowU_t>() + "-" + std::to_string(ComputeTypeT);
+        std::stringstream ss;
+        ss<<"lowu-"<<get_type<LowU_t>()<<"_"
+          <<"compute-"<<compute_type()<<"_"
+          <<"gen-"<<gen_type()<<"_"
+          <<"rows-"<<rows_str();
+
+        return ss.str();
     }
 
+    static std::string rows_str()
+    {
+        std::stringstream ss;
+        for (int i=0; i<Order; i++)
+        {
+            ss<<MatrixRows::dims[i];
+            if (i < Order - 1)
+            {
+                ss<<"x";
+            }
+        }
+        return ss.str();
+    }
 
     static std::string compute_type()
     {
         return compute_type_map.at(ComputeTypeT);
     }
 
+
+    static std::string gen_type()
+    {
+        return gen_type_map.at(GenTypeT);
+    }
 
 };
 } //mxt

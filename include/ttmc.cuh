@@ -106,17 +106,29 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublas
     static constexpr size_t N = MatrixCollection_t::N;
 
     /* Scaling */
+    //TODO
     TensorType_t * d_X = X.d_data;
+
+
+    /* Convert to fp16 */
+    globals::profiler->start_timer("conversion");
     MatrixType_t * d_X_scaled = utils::d_to_u<TensorType_t, MatrixType_t>(d_X, InputTensor_t::In);
+    globals::profiler->stop_timer("conversion");
+
      
     /* Set up output tensor */
+    globals::profiler->start_timer("allocation");
     AccumType_t * d_Y_prev, * d_Y_curr, * d_Y_tmp;
     CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0)));
-    CUDA_CHECK(cudaMalloc(&d_Y_tmp, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0))); //TODO: Overallocation
+    CUDA_CHECK(cudaMalloc(&d_Y_tmp, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0))); //TODO: This is an overallocation
+    globals::profiler->stop_timer("allocation");
 
     /* TTM chain */
     for (int i = 0; i < N; i++)
     {
+        std::string timername("ttmc-mode" + std::to_string(i));
+
+        globals::profiler->start_timer(timername.c_str());
 
         MatrixType_t * d_U = matrices.get_matrix(i);
 
@@ -176,10 +188,14 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublas
         }
 
         CUDA_CHECK(cudaDeviceSynchronize());
+        globals::profiler->stop_timer(timername.c_str());
 
     }
 
+    globals::profiler->start_timer("conversion");
     TensorType_t * d_Y_final = utils::d_to_u<AccumType_t, TensorType_t>(d_Y_prev, OutputTensor_t::In);
+    globals::profiler->stop_timer("conversion");
+
     OutputTensor_t Y(d_Y_final);
 
     CUDA_FREE(d_Y_prev);

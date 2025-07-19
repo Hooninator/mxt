@@ -31,30 +31,25 @@ void run_trial(std::string& path)
     DenseTensor_t X(path.c_str()); 
     utils::print_separator("Done IO");
 
-    MatrixCollection_t matrices;
-
+    MatrixCollection_t matrices(Conf::Generator);
 
     utils::print_separator("Beginning TTMc");
     for (uint32_t t = 0; t < NTRIALS; t++)
     {
-        globals::profiler->start_timer("ttmc");
+        globals::profiler->start_timer("ttmc-total");
         OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t>(X, matrices, ComputeType);
-        globals::profiler->stop_timer("ttmc");
+        globals::profiler->stop_timer("ttmc-total");
 
-        if (t % 10 == 0)
-        {
-            globals::profiler->print_timer("ttmc");
-        }
-
-#if SAVE
         if (t == NTRIALS - 1)
         {
+            globals::profiler->print_timer("ttmc-total");
+#if SAVE
             std::ofstream y_file;
             y_file.open(std::string(tensor_name + "_" + Conf::str() + "_output.dns"));
             Y.dump(y_file);
             y_file.close();
-        }
 #endif
+        }
     }
     utils::print_separator("Done TTMc");
 

@@ -52,12 +52,12 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 using SmallDense = TtmcConfig<Shape<3, 3, 3>, 
                      Shape<2,2,2>, 
-                     double, double, CUBLAS_COMPUTE_64F>;
+                     double, double, CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 
 using IndianPines = TtmcConfig<Shape<145, 145, 200>, 
                         Shape<20, 20, 20>,
-                        double, double, CUBLAS_COMPUTE_64F>;
+                        double, double, CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 
 int main(int argc, char ** argv)

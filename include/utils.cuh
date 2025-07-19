@@ -14,6 +14,8 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
+#define MAX_HALF 65504
+
 #if DEBUG >= 1
 #define DEBUG_PRINT(msg, ...) \
     do { \
@@ -204,7 +206,7 @@ struct round_functor
             }
             if constexpr(std::is_same<T2, float>::value)
             {
-                return (float)(x);
+                return __double2float_rd(x);
             }
         }
         if constexpr(std::is_same<T1, float>::value)

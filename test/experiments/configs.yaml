@@ -5,7 +5,7 @@ nips:
   configs: [
     "double, double, double",
     "float, float, float",
-    "__half, float, __half"
+    "__half, float, float"
   ]
 
 
@@ -15,7 +15,7 @@ kinetic:
   configs: [
     "double, double, double",
     "float, float, float",
-    "__half, float, __half"
+    "__half, float, float"
   ]
   
 
@@ -25,7 +25,7 @@ uber:
   configs: [
     "double, double, double",
     "float, float, float",
-    "__half, float, __half"
+    "__half, float, float"
   ]
   
 
@@ -35,5 +35,36 @@ uber:
   configs: [
     "double, double, double",
     "float, float, float",
-    "__half, float, __half"
+    "__half, float, float"
   ]
+
+
+evil_fp16:
+  shape: [100, 100, 100, 100]
+  ranks: [10, 10, 10, 10]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, float"
+  ]
+
+
+evil_fp16_overflow:
+  shape: [100, 100, 100, 100]
+  ranks: [10, 10, 10, 10]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, float"
+  ]
+
+
+evil_fp16_big:
+  shape: [1000, 1000, 1000, 1000]
+  ranks: [10, 10, 10, 10]
+  configs: [
+    "double, double, double",
+    "float, float, float",
+    "__half, float, float"
+  ]
+

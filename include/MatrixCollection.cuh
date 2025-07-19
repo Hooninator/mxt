@@ -9,6 +9,12 @@
 namespace mxt
 {
 
+enum MatrixGenerator_t
+{
+    GEN_SMALL,
+    GEN_RANDN,
+    GEN_BIG
+};
 
 template <typename T, typename RowsShape, typename ColsShape>
 class MatrixCollection
@@ -40,7 +46,7 @@ public:
     }(std::make_index_sequence<N>{});
 
 
-    MatrixCollection()
+    MatrixCollection(MatrixGenerator_t gen)
     {
 
         CUDA_CHECK(cudaMalloc(&d_buf, Size*sizeof(T)));
@@ -50,7 +56,20 @@ public:
         size_t offset = 0;
         for (int i=0; i<N; i++)
         {
-            rand::randn_buffer_inplace(d_buf + offset, Rows[i] * Cols[i]);
+            switch(gen)
+            {
+                case GEN_RANDN:
+                    rand::randn_buffer_inplace(d_buf + offset, Rows[i] * Cols[i]);
+                    break;
+                case GEN_SMALL:
+                    rand::randu_buffer_inplace(d_buf + offset, Rows[i] * Cols[i]);
+                    break;
+                case GEN_BIG:
+                    rand::randu_buffer_inplace(d_buf + offset, Rows[i] * Cols[i], 
+                                                static_cast<double>(MAX_HALF));
+                    break;
+            }
+
             matrices[i] = d_buf + offset;
             offset += Rows[i] * Cols[i];
         }

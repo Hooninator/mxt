@@ -1,19 +1,38 @@
 indian_pines:
   rows: [145, 145, 200]
-  cols: [10, 10, 10]
-  configs: ["double", "float", "__half"]
+  cols: [
+          [100, 100, 100],
+          [200, 200, 200],
+          [500, 500, 500],
+        ]
+  configs: ["double, CUBLAS_COMPUTE_64F", 
+            "float, CUBLAS_COMPUTE_32F", "float, CUBLAS_COMPUTE_32F_FAST_16F", 
+            "__half, CUBLAS_COMPUTE_16F"]
+  matrix_gens: ["GEN_SMALL", "GEN_RANDN", "GEN_BIG"]
+
 
 miranda:
   rows: [256, 256, 2048]
-  cols: [10, 10, 10]
-  configs: ["double", "float", "__half"]
+  cols: [
+          [100, 100, 100],
+          [200, 200, 200],
+          [500, 500, 500],
+        ]
+  configs: ["double, CUBLAS_COMPUTE_64F", 
+            "float, CUBLAS_COMPUTE_32F", "float, CUBLAS_COMPUTE_32F_FAST_16F", 
+            "__half, CUBLAS_COMPUTE_16F"]
+  matrix_gens: ["GEN_SMALL", "GEN_RANDN", "GEN_BIG"]
+
 
 evil:
   rows: [100, 100, 100]
-  cols: [10, 10, 10]
-  configs: ["double", "float", "__half"]
+  cols: [
+          [50, 50, 50],
+          [100, 100, 100],
+          [500, 500, 500],
+        ]
+  configs: ["double, CUBLAS_COMPUTE_64F", 
+            "float, CUBLAS_COMPUTE_32F", "float, CUBLAS_COMPUTE_32F_FAST_16F", 
+            "__half, CUBLAS_COMPUTE_16F"]
+  matrix_gens: ["GEN_SMALL", "GEN_RANDN", "GEN_BIG"]
 
-randn:
-  rows: [100, 100, 100, 100]
-  cols: [10, 10, 10, 10]
-  configs: ["double", "float", "__half"]
