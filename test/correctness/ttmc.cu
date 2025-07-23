@@ -15,9 +15,11 @@ static const char * base = "../test/correctness/ttmc_golden/";
 template <typename Conf>
 void run_correctness(std::string& path, std::string& tensorname)
 {
-    using DenseTensor_t = DenseTensor<typename Conf::HighU_t, typename Conf::MatrixCols_t>;
-    using MatrixCollection_t = MatrixCollection<typename Conf::LowU_t, typename Conf::MatrixRows_t, typename Conf::MatrixCols_t>;
+    using DenseTensor_t = DenseTensor<typename Conf::InputType_t, typename Conf::MatrixCols_t>;
+    using MatrixCollection_t = MatrixCollection<typename Conf::InputType_t, typename Conf::MatrixRows_t, typename Conf::MatrixCols_t>;
     using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename Conf::MatrixRows_t>;
+    using Normalizer_t = Conf::Normalizer_t;
+    using AccumType_t = Conf::AccumType_t;
 
     utils::print_separator("Beginning IO");
     DenseTensor_t X(path.c_str()); 
@@ -29,8 +31,11 @@ void run_correctness(std::string& path, std::string& tensorname)
 
     MatrixCollection_t matrices(golden_dir.c_str());
 
+    Normalizer_t normalizer(DenseTensor_t::Order);
+
     utils::print_separator("Beginning TTMc");
-    OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t>(X, matrices);
+    OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t, Normalizer_t, AccumType_t>
+                                       (X, matrices, normalizer, Conf::ComputeType);
     utils::print_separator("Done TTMc");
 
     /* Correctness check */
@@ -51,13 +56,17 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 
 using SmallDense = TtmcConfig<Shape<3, 3, 3>, 
-                     Shape<2,2,2>, 
-                     double, double, CUBLAS_COMPUTE_64F, GEN_RANDN>;
+                     Shape<6,6,6>, 
+                     double, float, 
+                     NormalizerTwoSided<double>,
+                     CUBLAS_COMPUTE_32F, GEN_RANDN>;
 
 
 using IndianPines = TtmcConfig<Shape<145, 145, 200>, 
                         Shape<20, 20, 20>,
-                        double, double, CUBLAS_COMPUTE_64F, GEN_RANDN>;
+                        double, double, 
+                        NormalizerTwoSided<double>,
+                        CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 
 int main(int argc, char ** argv)

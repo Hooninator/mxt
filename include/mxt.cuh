@@ -3,4 +3,5 @@
 #include "sparse_tucker.cuh"
 #include "tensor_io.cuh"
 #include "ttmc.cuh"
+#include "Normalizers.cuh"
 #endif

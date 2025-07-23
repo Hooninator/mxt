@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.27)
 
 project(mxt LANGUAGES CXX C CUDA)
 
-set(CMAKE_CUDA_ARCHITECTURES "80") 
+set(CMAKE_CUDA_ARCHITECTURES "75") 
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,7 +11,7 @@ find_package(CUDAToolkit REQUIRED)
 find_package(MPI REQUIRED)
 find_package(OpenMP REQUIRED)
 
-set(CMAKE_CUDA_FLAGS "--extended-lambda --expt-relaxed-constexpr -ccbin=CC -fopenmp")
+set(CMAKE_CUDA_FLAGS "--extended-lambda --expt-relaxed-constexpr -ccbin=g++ -fopenmp")
 set(COMPILER_FLAGS "-O3")
 
 add_library(mxt src/sparse_tucker.cu)

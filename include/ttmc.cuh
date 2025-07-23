@@ -6,6 +6,7 @@
 
 #include "DenseTensor.cuh"
 #include "MatrixCollection.cuh"
+#include "Normalizers.cuh"
 
 
 namespace mxt
@@ -91,13 +92,16 @@ void ttm_mode1(InputType1 * d_X, InputType2 * d_U, OutputType * d_Y,
 }
 
 
-template <typename InputTensor_t, typename MatrixCollection_t, typename OutputTensor_t>
-OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublasComputeType_t compute_type=CUBLAS_COMPUTE_64F)
+template <typename InputTensor_t, typename MatrixCollection_t, typename OutputTensor_t, typename Normalizer, typename AccumType_t>
+OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normalizer& normalizer, cublasComputeType_t compute_type)
 {
 
     using TensorType_t = InputTensor_t::ValueType_t;
     using MatrixType_t = MatrixCollection_t::ValueType_t;
-    using AccumType_t = MatrixType_t;
+    using OutputType_t = OutputTensor_t::ValueType_t;
+
+    static_assert(std::is_same<TensorType_t, MatrixType_t>::value);
+    static_assert(std::is_same<TensorType_t, OutputType_t>::value);
 
     static constexpr auto MatrixRows = MatrixCollection_t::Rows; 
     static constexpr auto MatrixCols = MatrixCollection_t::Cols; 
@@ -105,22 +109,27 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublas
 
     static constexpr size_t N = MatrixCollection_t::N;
 
-    /* Scaling */
-    //TODO
-    TensorType_t * d_X = X.d_data;
-
-
-    /* Convert to fp16 */
+    /* Normalize and convert tensor to AccumType_t */
     globals::profiler->start_timer("conversion");
-    MatrixType_t * d_X_scaled = utils::d_to_u<TensorType_t, MatrixType_t>(d_X, InputTensor_t::In);
+    TensorType_t * d_X = X.d_data;
+    AccumType_t * d_X_scaled = utils::d_to_u<TensorType_t, AccumType_t>(d_X, InputTensor_t::In);
     globals::profiler->stop_timer("conversion");
-
      
     /* Set up output tensor */
     globals::profiler->start_timer("allocation");
     AccumType_t * d_Y_prev, * d_Y_curr, * d_Y_tmp;
-    CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0)));
-    CUDA_CHECK(cudaMalloc(&d_Y_tmp, sizeof(AccumType_t) * MatrixRows[0] * X.unfolding_cols(0))); //TODO: This is an overallocation
+
+    size_t d_Y_size = 0;
+    size_t d_Y_size_curr = InputTensor_t::In;
+    for (int i=0; i<N; i++)
+    {
+        d_Y_size_curr /= MatrixCols[i];
+        d_Y_size_curr *= MatrixRows[i];
+        d_Y_size = std::max(d_Y_size, d_Y_size_curr);
+    }
+
+    CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(AccumType_t) * d_Y_size));
+    CUDA_CHECK(cudaMalloc(&d_Y_tmp, sizeof(AccumType_t) * d_Y_size)); //TODO: This is an overallocation
     globals::profiler->stop_timer("allocation");
 
     /* TTM chain */
@@ -132,7 +141,7 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublas
 
         MatrixType_t * d_U = matrices.get_matrix(i);
 
-        size_t y_size;
+        /* Normalize and convert matrix */
 
         if (i == 0)
         {
@@ -141,13 +150,9 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublas
             const size_t n = X.unfolding_cols(0);
             const size_t k = MatrixCols[0];
 
-            y_size = m * n;
-
-
             ttm_mode1(d_X_scaled, d_U, d_Y_curr, 
                       m, n, k, 
                       compute_type);
-
 
             d_Y_prev = d_Y_curr;
             d_Y_curr = d_Y_tmp;
@@ -173,14 +178,10 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, cublas
             size_t n = MatrixCols[i];
             size_t k = MatrixRows[i];
 
-            y_size = m * k * p;
-
-
             ttm_modek(d_Y_prev, d_U, d_Y_curr, 
                       m, n, k, 
                       p, i, 
                       compute_type);
-
 
             std::swap(d_Y_prev, d_Y_curr);
 

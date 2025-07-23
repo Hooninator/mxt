@@ -25,11 +25,11 @@ miranda:
 
 
 evil:
-  rows: [100, 100, 100]
+  rows: [100, 100, 100, 10]
   cols: [
-          [50, 50, 50],
-          [100, 100, 100],
-          [500, 500, 500],
+          [50, 50, 50, 5],
+          [100, 100, 100, 10],
+          [500, 500, 500, 50],
         ]
   configs: ["double, CUBLAS_COMPUTE_64F", 
             "float, CUBLAS_COMPUTE_32F", "float, CUBLAS_COMPUTE_32F_FAST_16F", 

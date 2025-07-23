@@ -21,13 +21,14 @@ std::string get_type()
 }
 
 
-template <typename MatrixCols, typename MatrixRows, typename HighU, typename LowU, int ComputeTypeT, int GenTypeT>
+template <typename MatrixCols, typename MatrixRows, typename InputType, typename AccumType, typename Normalizer, int ComputeTypeT, int GenTypeT>
 struct TtmcConfig
 {
     using MatrixCols_t = MatrixCols;
     using MatrixRows_t = MatrixRows;
-    using HighU_t = HighU;
-    using LowU_t = LowU;
+    using InputType_t = InputType;
+    using AccumType_t = AccumType;
+    using Normalizer_t = Normalizer;
 
     static_assert(MatrixCols_t::dims.size() == MatrixRows_t::dims.size());
 
@@ -57,7 +58,7 @@ struct TtmcConfig
         std::cout<<"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"<<std::endl;
         std::cout<<"\tTENSOR: "<<tensor<<std::endl;
         std::cout<<"\tMATRIX ROWS: "<<rows_str()<<std::endl;
-        std::cout<<"\tLOW PRECISION: "<<get_type<LowU_t>()<<std::endl;
+        std::cout<<"\tACCUMULATION TYPE: "<<get_type<AccumType_t>()<<std::endl;
         std::cout<<"\tCOMPUTE TYPE: "<<compute_type()<<std::endl;
         std::cout<<"\tMATRIX GENERATION TYPE: "<<gen_type()<<std::endl;
         std::cout<<"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"<<std::endl;
@@ -67,7 +68,7 @@ struct TtmcConfig
     static std::string str()
     {
         std::stringstream ss;
-        ss<<"lowu-"<<get_type<LowU_t>()<<"_"
+        ss<<"lowu-"<<get_type<AccumType_t>()<<"_"
           <<"compute-"<<compute_type()<<"_"
           <<"gen-"<<gen_type()<<"_"
           <<"rows-"<<rows_str();

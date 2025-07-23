@@ -4,8 +4,6 @@
 #include "common.cuh"
 #include "utils.cuh"
 
-#include <cutensor.h>
-
 namespace mxt
 {
 

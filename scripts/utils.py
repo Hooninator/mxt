@@ -14,8 +14,8 @@ def write_frostt(filename, X):
 
 def write_dns(filename, X):
     with open(filename, 'w') as file:
-        vals = X.flatten()
-        file.write(f"{len(X.shape)}\n{' '.join([str(s) for s in X.shape])}\n{vals.size()[0]}\n")
+        vals = list(X.flatten())
+        file.write(f"{len(X.shape)}\n{' '.join([str(s) for s in X.shape])}\n{len(vals)}\n")
         for i in range(len(vals)):
             if i % 10000==0:
                 print(f"Writing {i}/{len(vals)}")

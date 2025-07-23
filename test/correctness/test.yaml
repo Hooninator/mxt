@@ -2,7 +2,7 @@ configs:
   small_dense:
     name: "small_dense"
     shape: [3, 3, 3]
-    ranks: [2, 2, 2]
+    ranks: [6, 6, 6]
   indian_pines:
     name: "indian_pines"
     shape: [145, 145, 200]
