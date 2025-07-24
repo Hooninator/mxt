@@ -490,7 +490,7 @@ void transpose(T * d_data, size_t m, size_t n)
 
 
 
-size_t linear_index(const size_t * strides, const size_t * inds, size_t n)
+__host__ __device__ size_t linear_index(const size_t * strides, const size_t * inds, size_t n)
 {
     size_t ind = 0;
     size_t stride = 1;
@@ -516,6 +516,18 @@ std::array<size_t, N> multidx_natural(size_t idx, const std::array<size_t, N> di
     return multidx;
 }
 
+
+template <size_t N>
+__device__ std::array<size_t, N> multidx_natural(size_t idx, size_t * dims)
+{
+    std::array<size_t, N> multidx;
+    for (int i=0; i<N; i++)
+    {
+        multidx[i] = idx % dims[i];
+        idx /= dims[i];
+    }
+    return multidx;
+}
 
 
 template <size_t N>

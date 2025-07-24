@@ -10,6 +10,7 @@ struct Shape
     static constexpr std::array<size_t , sizeof...(Dims)> dims = {Dims...};
 };
 
+
 template <std::size_t Mode, typename ShapeT>
 struct AdjustShape;
 

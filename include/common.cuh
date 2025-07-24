@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstdint>
+#include <cassert>
 #include <tuple>
 #include <utility>
 #include <type_traits>

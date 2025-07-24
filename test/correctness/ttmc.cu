@@ -30,8 +30,7 @@ void run_correctness(std::string& path, std::string& tensorname)
     golden_dir.append("/");
 
     MatrixCollection_t matrices(golden_dir.c_str());
-
-    Normalizer_t normalizer(DenseTensor_t::Order);
+    Normalizer_t normalizer;
 
     utils::print_separator("Beginning TTMc");
     OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t, Normalizer_t, AccumType_t>
@@ -57,15 +56,15 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 using SmallDense = TtmcConfig<Shape<3, 3, 3>, 
                      Shape<6,6,6>, 
-                     double, float, 
-                     NormalizerTwoSided<double>,
+                     double, double, 
+                     NormalizerTwoSided<double, 3>,
                      CUBLAS_COMPUTE_32F, GEN_RANDN>;
 
 
 using IndianPines = TtmcConfig<Shape<145, 145, 200>, 
                         Shape<20, 20, 20>,
                         double, double, 
-                        NormalizerTwoSided<double>,
+                        NormalizerTwoSided<double, 3>,
                         CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 

@@ -93,7 +93,7 @@ void ttm_mode1(InputType1 * d_X, InputType2 * d_U, OutputType * d_Y,
 
 
 template <typename InputTensor_t, typename MatrixCollection_t, typename OutputTensor_t, typename Normalizer, typename AccumType_t>
-OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normalizer& normalizer, cublasComputeType_t compute_type)
+OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normalizer normalizer, cublasComputeType_t compute_type)
 {
 
     using TensorType_t = InputTensor_t::ValueType_t;
@@ -111,7 +111,10 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
 
     /* Normalize and convert tensor to AccumType_t */
     globals::profiler->start_timer("conversion");
+
     TensorType_t * d_X = X.d_data;
+    normalizer.normalize_tensor(d_X, TensorModes.data(), InputTensor_t::In, 0);
+
     AccumType_t * d_X_scaled = utils::d_to_u<TensorType_t, AccumType_t>(d_X, InputTensor_t::In);
     globals::profiler->stop_timer("conversion");
      
@@ -142,6 +145,11 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
         MatrixType_t * d_U = matrices.get_matrix(i);
 
         /* Normalize and convert matrix */
+        normalizer.normalize_matrix(d_U, MatrixRows[i], MatrixCols[i], i);
+        AccumType_t * d_U_scaled = utils::d_to_u<MatrixType_t, AccumType_t>(d_U, MatrixRows[i]*MatrixCols[i]);
+
+
+        size_t y_size;
 
         if (i == 0)
         {
@@ -150,7 +158,7 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
             const size_t n = X.unfolding_cols(0);
             const size_t k = MatrixCols[0];
 
-            ttm_mode1(d_X_scaled, d_U, d_Y_curr, 
+            ttm_mode1(d_X_scaled, d_U_scaled, d_Y_curr, 
                       m, n, k, 
                       compute_type);
 
@@ -159,6 +167,8 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
 
             TensorModes[0] = MatrixRows[0];
             CUDA_FREE(d_X_scaled);
+
+            y_size = m * n;
         }
         else
         {
@@ -178,7 +188,7 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
             size_t n = MatrixCols[i];
             size_t k = MatrixRows[i];
 
-            ttm_modek(d_Y_prev, d_U, d_Y_curr, 
+            ttm_modek(d_Y_prev, d_U_scaled, d_Y_curr, 
                       m, n, k, 
                       p, i, 
                       compute_type);
@@ -186,9 +196,15 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
             std::swap(d_Y_prev, d_Y_curr);
 
             TensorModes[i] = MatrixRows[i];
+
+            y_size = p * m * k;
         }
 
         CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_FREE(d_U_scaled);
+
+        normalizer.recover_tensor(d_Y_prev, TensorModes.data(), y_size, i);
+
         globals::profiler->stop_timer(timername.c_str());
 
     }
