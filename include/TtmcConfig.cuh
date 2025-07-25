@@ -21,19 +21,20 @@ std::string get_type()
 }
 
 
-template <typename MatrixCols, typename MatrixRows, typename InputType, typename AccumType, typename Normalizer, int ComputeTypeT, int GenTypeT>
+template <typename MatrixCols, typename MatrixRows, typename InputType, typename ComputeTypeT, typename AccumType, typename Normalizer, int ComputeTypeIT, int GenTypeT>
 struct TtmcConfig
 {
     using MatrixCols_t = MatrixCols;
     using MatrixRows_t = MatrixRows;
     using InputType_t = InputType;
     using AccumType_t = AccumType;
+    using ComputeType_t = ComputeTypeT;
     using Normalizer_t = Normalizer;
 
     static_assert(MatrixCols_t::dims.size() == MatrixRows_t::dims.size());
 
     static constexpr uint32_t Order = MatrixCols_t::dims.size();
-    static constexpr cublasComputeType_t ComputeType = static_cast<cublasComputeType_t>(ComputeTypeT);
+    static constexpr cublasComputeType_t ComputeType = static_cast<cublasComputeType_t>(ComputeTypeIT);
     static constexpr MatrixGenerator_t Generator = static_cast<MatrixGenerator_t>(GenTypeT);
 
     inline static const std::map<const int, std::string> compute_type_map
@@ -92,7 +93,7 @@ struct TtmcConfig
 
     static std::string compute_type()
     {
-        return compute_type_map.at(ComputeTypeT);
+        return compute_type_map.at(ComputeTypeIT);
     }
 
 

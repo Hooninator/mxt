@@ -286,7 +286,7 @@ void print_h_arr(T * h_arr, size_t n, const char * prefix, Args... args)
         {
             std::cout<<" ";
         }
-        std::cout<<"["<<prefix<<"]"<<'\n';
+        std::cout<<BLUE<<"["<<prefix<<"]"<<RESET<<'\n';
     }
     std::printf("\n");
     std::flush(std::cout);
@@ -518,15 +518,13 @@ std::array<size_t, N> multidx_natural(size_t idx, const std::array<size_t, N> di
 
 
 template <size_t N>
-__device__ std::array<size_t, N> multidx_natural(size_t idx, size_t * dims)
+__device__ void multidx_natural(size_t idx, std::array<size_t, N> dims, size_t * multidx)
 {
-    std::array<size_t, N> multidx;
     for (int i=0; i<N; i++)
     {
         multidx[i] = idx % dims[i];
         idx /= dims[i];
     }
-    return multidx;
 }
 
 

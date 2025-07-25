@@ -25,37 +25,40 @@ public:
     NormalizerNull()
     {}
 
-    template <typename Tensor_t>
-    void normalize_tensor(T * d_X, size_t * modes, const size_t In, const size_t mode)
+    void normalize_tensor(T * d_X, T theta, std::array<size_t, N>& modes, const size_t In, const size_t mode)
     {
         //Do nothing
     }
 
 
-    template <typename Matrix_t>
-    void normalize_matrix(Matrix_t* U, const size_t m, const size_t n)
+    void normalize_matrix(T * d_U, T theta, const size_t m, const size_t n, const size_t mode)
     {
         //Do nothing
     }
 
+
+    void recover_tensor(T * d_X, T theta, std::array<size_t, N>& modes, const size_t In, const size_t mode)
+    {
+        //Do nothing
+    }
 
 };
 
 
 /* X_tilde = RXS --- U_tilde = DUR^-1 */
-template <typename T, size_t NT>
+template <typename T, size_t N>
 class NormalizerTwoSided
 {
 public:
 
-    static constexpr size_t N = NT;
 
     NormalizerTwoSided():
         R_vec(N), S_vec(N), D_vec(N),
         R_vec_n(N), S_vec_n(N), D_vec_n(N)
     {}
 
-    void normalize_tensor(T * d_X, size_t * modes, const size_t In, const size_t mode)
+
+    void normalize_tensor(T * d_X, T theta, std::array<size_t, N>& modes, const size_t In, const size_t mode)
     {
         assert(mode < N);
 
@@ -66,13 +69,23 @@ public:
         T * d_R = kernels::unfolding_rowmax<N>(d_X, modes, In, mode);
 
         /* Apply R */
-        kernels::tensor_apply_diag_normalization_left<N>(d_X, d_R, modes, In, mode);
+        kernels::tensor_apply_diag_normalization_left<N>(d_X, d_R, modes, In, mode, true);
 
         /* Now, set S */
         T * d_S = kernels::unfolding_colmax<N>(d_X, modes, In, mode);
 
         /* Apply S */
-        kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode);
+        kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode, true);
+
+        /* Theta */
+        CUBLAS_CHECK(cublasScalEx(globals::cublas_handle,
+                                  In, &theta, utils::to_cuda_dtype<T>(),
+                                  d_X, utils::to_cuda_dtype<T>(), 1,
+                                  (std::is_same<T, double>::value) ? CUDA_R_64F : CUDA_R_32F));
+
+        utils::write_d_arr(globals::logfile, d_X, In, "Normalized Tensor");
+        utils::write_d_arr(globals::logfile, d_R, R_size, "d_R");
+        utils::write_d_arr(globals::logfile, d_S, S_size, "d_S");
 
         /* Add matrices to vectors */
         R_vec[mode] = d_R;
@@ -82,15 +95,17 @@ public:
     }
 
 
-    void normalize_matrix(T * d_U, const size_t m, const size_t n, const size_t mode)
+    void normalize_matrix(T * d_U, T theta, const size_t m, const size_t n, const size_t mode)
     {
         assert(mode < N);
 
         /* First, apply R^-1 -- since the normalization matrices are stored as \|Xi\|_inf, we can just use dgmm */
         linalg::dgmm_inplace(d_U, R_vec[mode], m, n, CUBLAS_SIDE_RIGHT);
 
+        utils::write_d_arr(globals::logfile, d_U, m*n, "Pseudo-Normalized Matrix");
+
         /* Now, set D */
-        size_t modes[2] = {m, n};
+        std::array<size_t, 2> modes = {m, n};
         T * d_D = kernels::unfolding_rowmax<2>(d_U, modes, m*n, 0);
 
         invert_t op{};
@@ -100,6 +115,14 @@ public:
         /* Apply D */
         linalg::dgmm_inplace(d_U, d_D, m, n, CUBLAS_SIDE_LEFT);
 
+        /* Theta */
+        CUBLAS_CHECK(cublasScalEx(globals::cublas_handle,
+                                  m*n, &theta, utils::to_cuda_dtype<T>(),
+                                  d_U, utils::to_cuda_dtype<T>(), 1,
+                                  (std::is_same<T, double>::value) ? CUDA_R_64F : CUDA_R_32F));
+
+        utils::write_d_arr(globals::logfile, d_U, m*n, "Normalized Matrix");
+
         /* Add matrices to vectors */
         D_vec[mode] = d_D;
         D_vec_n[mode] = m;
@@ -107,23 +130,25 @@ public:
     }
 
 
-    void recover_tensor(T * d_X, size_t * modes, const size_t In, const size_t mode)
+    void recover_tensor(T * d_X, T theta, std::array<size_t, N>& modes, const size_t In, const size_t mode)
     {
         assert(mode < N);
 
-        /* Apply D */
+        /* Apply D^-1 */
         T * d_D = D_vec[mode];
-        kernels::tensor_apply_diag_normalization_left<N>(d_X, d_D, modes, In, mode);
+        kernels::tensor_apply_diag_normalization_left<N>(d_X, d_D, modes, In, mode, true);
 
         /* Apply S^-1 */
         T * d_S = S_vec[mode];
-        invert_t op{};
-        auto d_S_ptr = thrust::device_pointer_cast<T>(d_S);
-        thrust::transform(d_S_ptr, d_S_ptr + (In / mode), d_S_ptr, op);
-
         kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode);
 
-        thrust::transform(d_S_ptr, d_S_ptr + (In / mode), d_S_ptr, op);
+        /* Theta */
+        theta = 1/(theta*theta); 
+        CUBLAS_CHECK(cublasScalEx(globals::cublas_handle,
+                                  In, &theta, utils::to_cuda_dtype<T>(),
+                                  d_X, utils::to_cuda_dtype<T>(), 1,
+                                  (std::is_same<T, double>::value) ? CUDA_R_64F : CUDA_R_32F));
+
         
     }
 
@@ -148,9 +173,9 @@ public:
     };
 
 private:
-    std::vector<T*> R_vec; //R
-    std::vector<T*> S_vec; //S
-    std::vector<T*> D_vec; //D^-1
+    std::vector<T*> R_vec; //R^-1
+    std::vector<T*> S_vec; //S^-1
+    std::vector<T*> D_vec; //D
 
     std::vector<size_t> R_vec_n;
     std::vector<size_t> S_vec_n;

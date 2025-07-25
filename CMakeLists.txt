@@ -12,7 +12,8 @@ find_package(MPI REQUIRED)
 find_package(OpenMP REQUIRED)
 
 set(CMAKE_CUDA_FLAGS "--extended-lambda --expt-relaxed-constexpr -ccbin=g++ -fopenmp")
-set(COMPILER_FLAGS "-O3")
+#set(COMPILER_FLAGS "-O3")
+set(COMPILER_FLAGS "-g")
 
 add_library(mxt src/sparse_tucker.cu)
 target_include_directories(mxt PUBLIC include)

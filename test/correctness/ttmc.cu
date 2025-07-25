@@ -20,6 +20,7 @@ void run_correctness(std::string& path, std::string& tensorname)
     using OutputDenseTensor_t = DenseTensor<typename DenseTensor_t::ValueType_t, typename Conf::MatrixRows_t>;
     using Normalizer_t = Conf::Normalizer_t;
     using AccumType_t = Conf::AccumType_t;
+    using ComputeType_t = Conf::ComputeType_t;
 
     utils::print_separator("Beginning IO");
     DenseTensor_t X(path.c_str()); 
@@ -33,9 +34,10 @@ void run_correctness(std::string& path, std::string& tensorname)
     Normalizer_t normalizer;
 
     utils::print_separator("Beginning TTMc");
-    OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t, Normalizer_t, AccumType_t>
+    OutputDenseTensor_t Y = ttmc_mixed<DenseTensor_t, MatrixCollection_t, OutputDenseTensor_t, Normalizer_t, ComputeType_t, AccumType_t>
                                        (X, matrices, normalizer, Conf::ComputeType);
     utils::print_separator("Done TTMc");
+
 
     /* Correctness check */
     std::string correct_output = golden_dir + "output.dns";
@@ -56,15 +58,20 @@ void run_correctness(std::string& path, std::string& tensorname)
 
 using SmallDense = TtmcConfig<Shape<3, 3, 3>, 
                      Shape<6,6,6>, 
-                     double, double, 
+                     double, double, double,
                      NormalizerTwoSided<double, 3>,
-                     CUBLAS_COMPUTE_32F, GEN_RANDN>;
+                     CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
+using SmallDenseNull = TtmcConfig<Shape<3, 3, 3>, 
+                     Shape<6,6,6>, 
+                     double, double, double,
+                     NormalizerNull<double, 3>,
+                     CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 using IndianPines = TtmcConfig<Shape<145, 145, 200>, 
                         Shape<20, 20, 20>,
-                        double, double, 
-                        NormalizerTwoSided<double, 3>,
+                        double, double, double,
+                        NormalizerNull<double, 3>,
                         CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 

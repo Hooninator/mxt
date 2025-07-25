@@ -92,35 +92,43 @@ void ttm_mode1(InputType1 * d_X, InputType2 * d_U, OutputType * d_Y,
 }
 
 
-template <typename InputTensor_t, typename MatrixCollection_t, typename OutputTensor_t, typename Normalizer, typename AccumType_t>
+template <typename InputTensor_t, typename MatrixCollection_t, typename OutputTensor_t, 
+          typename Normalizer, 
+          typename ComputePrecision_t, typename AccumPrecision_t>
 OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normalizer normalizer, cublasComputeType_t compute_type)
 {
 
-    using TensorType_t = InputTensor_t::ValueType_t;
-    using MatrixType_t = MatrixCollection_t::ValueType_t;
-    using OutputType_t = OutputTensor_t::ValueType_t;
+    using HighPrecision_t = InputTensor_t::ValueType_t;
 
-    static_assert(std::is_same<TensorType_t, MatrixType_t>::value);
-    static_assert(std::is_same<TensorType_t, OutputType_t>::value);
+    static_assert(std::is_same<HighPrecision_t, typename MatrixCollection_t::ValueType_t>::value);
+    static_assert(std::is_same<HighPrecision_t, typename OutputTensor_t::ValueType_t>::value);
 
     static constexpr auto MatrixRows = MatrixCollection_t::Rows; 
     static constexpr auto MatrixCols = MatrixCollection_t::Cols; 
     auto TensorModes = InputTensor_t::Modes; 
 
     static constexpr size_t N = MatrixCollection_t::N;
+    HighPrecision_t theta = 0.1;
+    size_t running_size = InputTensor_t::In;
 
-    /* Normalize and convert tensor to AccumType_t */
+    /* What parts use mixed precision? */
+    static constexpr bool compute_mixed = std::is_same<ComputePrecision_t, HighPrecision_t>::value;
+    static constexpr bool accum_mixed = std::is_same<AccumPrecision_t, HighPrecision_t>::value;
+
+    /* Normalize and convert tensor to AccumPrecision_t */
     globals::profiler->start_timer("conversion");
+    HighPrecision_t * d_X = X.d_data;
+    normalizer.normalize_tensor(d_X, theta, TensorModes, InputTensor_t::In, 0);
+    DEBUG_PRINT("Done normalizing tensor");
 
-    TensorType_t * d_X = X.d_data;
-    normalizer.normalize_tensor(d_X, TensorModes.data(), InputTensor_t::In, 0);
-
-    AccumType_t * d_X_scaled = utils::d_to_u<TensorType_t, AccumType_t>(d_X, InputTensor_t::In);
+    ComputePrecision_t * d_X_scaled = utils::d_to_u<HighPrecision_t, ComputePrecision_t>(d_X, InputTensor_t::In);
     globals::profiler->stop_timer("conversion");
      
     /* Set up output tensor */
     globals::profiler->start_timer("allocation");
-    AccumType_t * d_Y_prev, * d_Y_curr, * d_Y_tmp;
+    ComputePrecision_t * d_Y_compute;
+    AccumPrecision_t * d_Y_accum;
+    HighPrecision_t * d_Y_out;
 
     size_t d_Y_size = 0;
     size_t d_Y_size_curr = InputTensor_t::In;
@@ -131,26 +139,44 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
         d_Y_size = std::max(d_Y_size, d_Y_size_curr);
     }
 
-    CUDA_CHECK(cudaMalloc(&d_Y_curr, sizeof(AccumType_t) * d_Y_size));
-    CUDA_CHECK(cudaMalloc(&d_Y_tmp, sizeof(AccumType_t) * d_Y_size)); //TODO: This is an overallocation
+    //TODO: These are overallocations
+    CUDA_CHECK(cudaMalloc(&d_Y_compute, sizeof(ComputePrecision_t) * d_Y_size)); 
+    CUDA_CHECK(cudaMalloc(&d_Y_accum, sizeof(AccumPrecision_t) * d_Y_size));
+    CUDA_CHECK(cudaMalloc(&d_Y_out, sizeof(HighPrecision_t) * d_Y_size)); 
     globals::profiler->stop_timer("allocation");
 
     /* TTM chain */
     for (int i = 0; i < N; i++)
     {
-        std::string timername("ttmc-mode" + std::to_string(i));
+        std::cout<<CYAN<<"  --Iteration "<<i<<RESET<<std::endl;
 
+        /* Normalize tensor if not first iteration */
+        if (i > 0)
+        {
+            DEBUG_PRINT("Normalizing tensor");
+            normalizer.normalize_tensor(d_Y_out, theta, TensorModes, running_size, i);
+
+            if (compute_mixed)
+            {
+                utils::d_to_u<HighPrecision_t, ComputePrecision_t>(d_Y_out, d_Y_compute, running_size);
+            }
+            else
+            {
+                std::swap(d_Y_out, d_Y_compute);
+            }
+        }
+
+        std::string timername("ttmc-mode" + std::to_string(i));
         globals::profiler->start_timer(timername.c_str());
 
-        MatrixType_t * d_U = matrices.get_matrix(i);
-
         /* Normalize and convert matrix */
-        normalizer.normalize_matrix(d_U, MatrixRows[i], MatrixCols[i], i);
-        AccumType_t * d_U_scaled = utils::d_to_u<MatrixType_t, AccumType_t>(d_U, MatrixRows[i]*MatrixCols[i]);
+        HighPrecision_t * d_U = matrices.get_matrix(i);
+        normalizer.normalize_matrix(d_U, theta, MatrixRows[i], MatrixCols[i], i);
+        ComputePrecision_t * d_U_scaled = utils::d_to_u<HighPrecision_t, ComputePrecision_t>(d_U, MatrixRows[i]*MatrixCols[i]);
+        DEBUG_PRINT("Normalized matrix");
 
-
+        /* TTM */
         size_t y_size;
-
         if (i == 0)
         {
             /* Special case of mode 1 */
@@ -158,12 +184,9 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
             const size_t n = X.unfolding_cols(0);
             const size_t k = MatrixCols[0];
 
-            ttm_mode1(d_X_scaled, d_U_scaled, d_Y_curr, 
+            ttm_mode1(d_X_scaled, d_U_scaled, d_Y_accum, 
                       m, n, k, 
                       compute_type);
-
-            d_Y_prev = d_Y_curr;
-            d_Y_curr = d_Y_tmp;
 
             TensorModes[0] = MatrixRows[0];
             CUDA_FREE(d_X_scaled);
@@ -172,6 +195,7 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
         }
         else
         {
+
             size_t m = 1;
             size_t p = 1;
 
@@ -188,35 +212,51 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
             size_t n = MatrixCols[i];
             size_t k = MatrixRows[i];
 
-            ttm_modek(d_Y_prev, d_U_scaled, d_Y_curr, 
+            y_size = p * m * k;
+
+
+            ttm_modek(d_Y_compute, d_U_scaled, d_Y_accum, 
                       m, n, k, 
                       p, i, 
                       compute_type);
 
-            std::swap(d_Y_prev, d_Y_curr);
+            //std::swap(d_Y_prev, d_Y_curr);
 
             TensorModes[i] = MatrixRows[i];
 
-            y_size = p * m * k;
         }
 
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_FREE(d_U_scaled);
 
-        normalizer.recover_tensor(d_Y_prev, TensorModes.data(), y_size, i);
+        /* Recover output and update size */
+        if (accum_mixed)
+        {
+            utils::d_to_u<AccumPrecision_t, HighPrecision_t>(d_Y_accum, d_Y_out, y_size);
+        }
+        else
+        {
+            std::swap(d_Y_out, d_Y_accum);
+        }
+
+        normalizer.recover_tensor(d_Y_out, theta, TensorModes, y_size, i);
+
+        running_size /= MatrixCols[i];
+        running_size *= MatrixRows[i];
 
         globals::profiler->stop_timer(timername.c_str());
 
     }
 
     globals::profiler->start_timer("conversion");
-    TensorType_t * d_Y_final = utils::d_to_u<AccumType_t, TensorType_t>(d_Y_prev, OutputTensor_t::In);
+    HighPrecision_t * d_Y_final = utils::d_to_u<AccumPrecision_t, HighPrecision_t>(d_Y_out, OutputTensor_t::In);
     globals::profiler->stop_timer("conversion");
 
     OutputTensor_t Y(d_Y_final);
 
-    CUDA_FREE(d_Y_prev);
-    CUDA_FREE(d_Y_tmp);
+    CUDA_FREE(d_Y_compute);
+    CUDA_FREE(d_Y_accum);
+    CUDA_FREE(d_Y_out);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     return Y;

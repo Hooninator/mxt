@@ -36,6 +36,7 @@
 
 #define DEBUG 1
 #define DEBUG_SPTTMC_KERNEL 0
+#define DEBUG_TTMC_KERNEL 1
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
