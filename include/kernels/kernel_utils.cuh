@@ -29,6 +29,29 @@
 #define SPTTMC_PRINT_BLOCK(msg, ...)
 #endif
 
+
+#if DEBUG_TTMC_KERNEL > 0
+#define TTMC_PRINT_T0(msg, ...) \
+    do { \
+        const uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x; \
+        if (tid == 0) \
+        { \
+            printf(msg "\n", ##__VA_ARGS__); \
+        } \
+    } while (0);
+
+#define TTMC_PRINT_BLOCK(msg, ...) \
+    do { \
+        if (threadIdx.x == 0) \
+        { \
+            printf(msg "\n", ##__VA_ARGS__); \
+        } \
+    } while (0);
+#else
+#define TTMC_PRINT_T0(msg, ...)
+#define TTMC_PRINT_BLOCK(msg, ...)
+#endif
+
 namespace mxt
 {
 namespace kernel_utils

@@ -529,6 +529,28 @@ __device__ void multidx_natural(size_t idx, std::array<size_t, N> dims, size_t *
 
 
 template <size_t N>
+__device__ void unfolding_idx(size_t linear_idx, std::array<size_t, N> dims, const size_t In, const size_t mode, size_t * idx)
+{
+    size_t multidx[N];
+    multidx_natural(linear_idx, dims, multidx);
+    size_t stride = 1;
+    idx[0] = multidx[mode];
+    idx[1] = 0;
+    for (int i=0; i<N; i++)
+    {
+        if (i==mode)
+            continue;
+        idx[1] += multidx[i] * stride;
+        stride *= dims[i];
+    }
+}
+
+
+    
+
+
+
+template <size_t N>
 std::array<size_t, N> multidx_reverse(size_t idx, std::array<size_t, N> dims)
 {
     std::reverse(dims.begin(), dims.end());

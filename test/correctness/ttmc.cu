@@ -44,6 +44,9 @@ void run_correctness(std::string& path, std::string& tensorname)
     OutputDenseTensor_t Y_correct(correct_output.c_str());
     bool correct = Y == Y_correct;
 
+    utils::write_d_arr(globals::logfile, Y.d_data, OutputDenseTensor_t::In, "Computed");
+    utils::write_d_arr(globals::logfile, Y_correct.d_data, OutputDenseTensor_t::In, "Correct");
+
     if (correct)
     {
         std::cout<<GREEN<<"Correctness passed!"<<RESET<<std::endl;
@@ -62,16 +65,28 @@ using SmallDense = TtmcConfig<Shape<3, 3, 3>,
                      NormalizerTwoSided<double, 3>,
                      CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
-using SmallDenseNull = TtmcConfig<Shape<3, 3, 3>, 
-                     Shape<6,6,6>, 
+using SmallDenseRect = TtmcConfig<Shape<3, 4, 5>, 
+                     Shape<2,2,2>, 
                      double, double, double,
-                     NormalizerNull<double, 3>,
+                     NormalizerTwoSided<double, 3>,
+                     CUBLAS_COMPUTE_64F, GEN_RANDN>;
+
+using Medium = TtmcConfig<Shape<50, 50, 50>, 
+                     Shape<20,20,20>, 
+                     double, double, double,
+                     NormalizerTwoSided<double, 3>,
+                     CUBLAS_COMPUTE_64F, GEN_RANDN>;
+
+using Large = TtmcConfig<Shape<200, 200, 200>, 
+                     Shape<100,100,100>, 
+                     double, double, double,
+                     NormalizerTwoSided<double, 3>,
                      CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 using IndianPines = TtmcConfig<Shape<145, 145, 200>, 
                         Shape<20, 20, 20>,
                         double, double, double,
-                        NormalizerNull<double, 3>,
+                        NormalizerTwoSided<double, 3>,
                         CUBLAS_COMPUTE_64F, GEN_RANDN>;
 
 
@@ -93,6 +108,18 @@ int main(int argc, char ** argv)
     if (tensor.compare("small_dense")==0)
     {
         run_correctness<SmallDense>(path, tensor);
+    }
+    else if (tensor.compare("small_dense_rect")==0)
+    {
+        run_correctness<SmallDenseRect>(path, tensor);
+    }
+    else if (tensor.compare("medium")==0)
+    {
+        run_correctness<Medium>(path, tensor);
+    }
+    else if (tensor.compare("large")==0)
+    {
+        run_correctness<Large>(path, tensor);
     }
     else if (tensor.compare("indian_pines")==0)
     {

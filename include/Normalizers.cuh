@@ -65,17 +65,18 @@ public:
         size_t R_size = modes[mode];
         size_t S_size = In / R_size;
 
+        /* Now, set S */
+        T * d_S = kernels::unfolding_colmax<N>(d_X, modes, In, mode);
+        utils::write_d_arr(globals::logfile, d_S, S_size, "d_S_init");
+
+        /* Apply S */
+        kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode, true);
+
         /* First, set R */
         T * d_R = kernels::unfolding_rowmax<N>(d_X, modes, In, mode);
 
         /* Apply R */
         kernels::tensor_apply_diag_normalization_left<N>(d_X, d_R, modes, In, mode, true);
-
-        /* Now, set S */
-        T * d_S = kernels::unfolding_colmax<N>(d_X, modes, In, mode);
-
-        /* Apply S */
-        kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode, true);
 
         /* Theta */
         CUBLAS_CHECK(cublasScalEx(globals::cublas_handle,
@@ -83,9 +84,9 @@ public:
                                   d_X, utils::to_cuda_dtype<T>(), 1,
                                   (std::is_same<T, double>::value) ? CUDA_R_64F : CUDA_R_32F));
 
-        utils::write_d_arr(globals::logfile, d_X, In, "Normalized Tensor");
-        utils::write_d_arr(globals::logfile, d_R, R_size, "d_R");
-        utils::write_d_arr(globals::logfile, d_S, S_size, "d_S");
+        //utils::write_d_arr(globals::logfile, d_X, In, "Normalized Tensor");
+        //utils::write_d_arr(globals::logfile, d_R, R_size, "d_R");
+        //utils::write_d_arr(globals::logfile, d_S, S_size, "d_S");
 
         /* Add matrices to vectors */
         R_vec[mode] = d_R;
@@ -107,6 +108,7 @@ public:
         /* Now, set D */
         std::array<size_t, 2> modes = {m, n};
         T * d_D = kernels::unfolding_rowmax<2>(d_U, modes, m*n, 0);
+        utils::write_d_arr(globals::logfile, d_D, m, "d_D");
 
         invert_t op{};
         auto d_D_ptr = thrust::device_pointer_cast<T>(d_D);
@@ -140,7 +142,7 @@ public:
 
         /* Apply S^-1 */
         T * d_S = S_vec[mode];
-        kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode);
+        kernels::tensor_apply_diag_normalization_right<N>(d_X, d_S, modes, In, mode, false);
 
         /* Theta */
         theta = 1/(theta*theta); 

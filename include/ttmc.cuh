@@ -115,7 +115,7 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
     static constexpr bool compute_mixed = std::is_same<ComputePrecision_t, HighPrecision_t>::value;
     static constexpr bool accum_mixed = std::is_same<AccumPrecision_t, HighPrecision_t>::value;
 
-    /* Normalize and convert tensor to AccumPrecision_t */
+    /* Normalize and convert tensor to ComputePrecision_t */
     globals::profiler->start_timer("conversion");
     HighPrecision_t * d_X = X.d_data;
     normalizer.normalize_tensor(d_X, theta, TensorModes, InputTensor_t::In, 0);
@@ -220,7 +220,6 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
                       p, i, 
                       compute_type);
 
-            //std::swap(d_Y_prev, d_Y_curr);
 
             TensorModes[i] = MatrixRows[i];
 
@@ -239,10 +238,11 @@ OutputTensor_t ttmc_mixed(InputTensor_t& X, MatrixCollection_t& matrices, Normal
             std::swap(d_Y_out, d_Y_accum);
         }
 
-        normalizer.recover_tensor(d_Y_out, theta, TensorModes, y_size, i);
 
         running_size /= MatrixCols[i];
         running_size *= MatrixRows[i];
+
+        normalizer.recover_tensor(d_Y_out, theta, TensorModes, running_size, i);
 
         globals::profiler->stop_timer(timername.c_str());
 
