@@ -7,8 +7,6 @@ import argparse
 import random
 import time
 
-from yaml import load, Loader
-
 from Normalizer import *
 
 base = "../tensors/"
@@ -36,13 +34,15 @@ def read_tensor(name, u):
     tensor = []
     with open(f"{base}{name}.dns", 'r') as file:
         nu = 0
+        i = 0
         for entry in file:
             nu += 1
             if nu==2:
                 shape = list(map(int, entry.split(" ")))
-            if entry.find(".")==-1:
-                continue
-            tensor.append(float(entry))
+                next(file)
+                break
+        tensor = [float(s) for line in file for s in line.split()]
+
     return torch.tensor(device='cuda:0', data=tensor, dtype=precisions[u]).reshape(shape)
 
 
@@ -161,10 +161,14 @@ def ttmc_mixed(X, U_list, normalizer, ordering, trial):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def frob_norm_err(Y_correct, Y_computed):
+    Y_correct = Y_correct.to(device='cpu')
+    Y_computed = Y_computed .to(device='cpu')
     return (torch.norm(Y_correct - Y_computed)) / torch.norm(Y_correct)
 
 
 def componentwise_err(Y_correct, Y_computed):
+    Y_correct = Y_correct.to(device='cpu')
+    Y_computed = Y_computed .to(device='cpu')
     err = torch.abs((Y_correct - Y_computed)) 
     return torch.max(err)
 
