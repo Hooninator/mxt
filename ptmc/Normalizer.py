@@ -45,31 +45,28 @@ class NormalizerTwoSided(Normalizer):
 
 
     def normalize_tensor(self, X, mode):
-
+        
         dims = X.shape
 
-        # Make S
-        cols = X.numel() / dims[mode]
-        S = X.abs().amax(dim=mode)
+        # Make S (column norm)
+        S = X.amax(dim=mode).abs_()  # no alloc if dim=mode
         S.reciprocal_()
 
-        # Apply S
-        X = X * S.view([dims[i] if i != mode else 1 for i in range(X.ndim)])
-        X.mul_(self.theta)
+        # Apply S and theta in one step
+        scale_shape = [dims[i] if i != mode else 1 for i in range(X.ndim)]
+        X.mul_(S.view(scale_shape)).mul_(self.theta)
 
-
-        # Make R
-        R = X.abs().amax(dim=[n for n in range(X.ndim) if n != mode])
+        # Make R (row norm)
+        R = X.amax(dim=[i for i in range(X.ndim) if i != mode]).abs_()
         R.reciprocal_()
 
-        # Apply R
-        X =  X * R.view([-1 if i==mode else 1 for i in range(X.ndim)])
+        # Apply R in-place
+        row_shape = [-1 if i == mode else 1 for i in range(X.ndim)]
+        X.mul_(R.view(row_shape))
 
-
-        self.R_mat = R
         self.S_mat = S
-
-        return X.to(self.compute)
+        self.R_mat = R
+        return X if X.dtype == self.compute else X.to(self.compute)
 
 
     def normalize_matrix(self, U, mode):
@@ -77,37 +74,39 @@ class NormalizerTwoSided(Normalizer):
         # Apply R^-1
         #R = torch.reciprocal(self.R_mat)
         self.R_mat.reciprocal_()
-        U = U * self.R_mat
+        U.mul_(self.R_mat)
 
         # Make D
-        D = U.abs().amax(dim=1)
+        D = U.amax(dim=1).abs_()
 
         # Apply D
-        U = U * D.unsqueeze(1)
-        U.mul_(self.theta)
+        U.mul_(D.unsqueeze(1)).mul_(self.theta)
 
         self.D_mat = D
 
-        return U.to(self.compute)
+        return U if U.dtype==self.compute else U.to(self.compute)
 
 
     def recover_tensor(self, X, mode):
 
         dims = X.shape
 
-        X = X.to(self.out)
+        X = X if X.dtype == self.out else X.to(self.out)
 
-        # Apply D^-1
+        # D^-1
         self.D_mat.reciprocal_()
-        X = X * self.D_mat.view([-1 if i==mode else 1 for i in range(X.ndim)])
+        row_shape = [-1 if i == mode else 1 for i in range(X.ndim)]
+        X.mul_(self.D_mat.view(row_shape))
 
-        # Apply S^-1
+        # S^-1
         self.S_mat.reciprocal_()
-        X = X * self.S_mat.view([dims[i] if i != mode else 1 for i in range(X.ndim)])
+        col_shape = [dims[i] if i != mode else 1 for i in range(X.ndim)]
+        X.mul_(self.S_mat.view(col_shape))
 
-        X.mul_(1/(self.theta * self.theta))
+        X.mul_(1.0 / (self.theta * self.theta))
 
         return X
+
 
 class NormalizerOnceTwoSided(NormalizerTwoSided):
 
@@ -148,11 +147,22 @@ class NormalizerOnceTwoSided(NormalizerTwoSided):
             return X
 
 
+class NormalizerALS:
+
+    def __init__(self, order, accum_u, compute_u, out_u):
+        self.order = order
+        self.accum_u = accum_u
+        self.compute_u = compute_u
+        self.out_u = out_u
+
+
 def make_normalizer(norm, order, accum_u, compute_u, out_u, theta):
     if norm=="null":
         return Normalizer( order,accum_u, compute_u, out_u, theta)
-    if norm=="two_sided":
+    elif norm=="two_sided":
         return NormalizerTwoSided( order,accum_u, compute_u, out_u, theta)
-    if norm=="once_two_sided":
+    elif norm=="once_two_sided":
         return NormalizerOnceTwoSided( order,accum_u, compute_u, out_u, theta)
+    elif norm=="als":
+        return NormalizerALS( order,accum_u, compute_u, out_u, theta)
 

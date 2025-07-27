@@ -192,8 +192,9 @@ def arg_to_str(args):
 
 
 def print_times():
+    print("----TIMES----")
     for timer in timers:
-        print(f"[{timer}]: {sum(timers[timer])}s")
+        print(f"\t[{timer}]: {sum(timers[timer])}s")
 
 
 if __name__ == "__main__":
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tensor", type=str)
     parser.add_argument("--ordering", type=str)
-    parser.add_argument("--trials", type=int, default=10)
+    parser.add_argument("--ntrials", type=int, default=10)
     parser.add_argument("--mat_rows", type=int, nargs='+')
     parser.add_argument("--mat_init", type=str)
     parser.add_argument("--alpha", type=float, default=1.0)
@@ -229,9 +230,14 @@ if __name__ == "__main__":
 
 
     # Run TTMc
-    for t in range(args.trials):
+    for t in range(args.ntrials):
 
-        print(f"\tTRIAL {t}")
+        print(f"----TRIAL {t}----")
+
+        X_cpy = X.to(device='cpu')
+        U_list_cpy = []
+        for i in range(X.ndim):
+            U_list_cpy.append(U_list[i].to(device='cpu'))
 
         ttmc_mixed_time = 0
         ttmc_baseline_time = 0
@@ -256,8 +262,12 @@ if __name__ == "__main__":
         if args.correctness:
             f_err = frob_norm_err(Y_correct, Y)
             c_err = componentwise_err(Y_correct, Y)
-            print(f"||Y_hat - Y||F / ||Y_hat||F: {f_err}")
-            print(f"max|Y_hat - Y|: {c_err}")
+            print(f"\t[frob_norm]: {f_err}")
+            print(f"\t[comp_norm]: {c_err}")
+
+        X = X_cpy.to(device='cuda:0')
+        for i in range(X.ndim):
+            U_list[i] = U_list_cpy[i].to(device='cuda:0')
 
     # Forward Error
 
