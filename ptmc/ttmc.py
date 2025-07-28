@@ -22,7 +22,8 @@ timers = {"tensor_norm_time":[],
           "tensor_recover_time":[],
           "ttm_time":[],
           "ttmc_baseline_time":[],
-          "ttmc_mixed_time":[]}
+          "ttmc_mixed_time":[],
+          "als_time":[]}
 
 
 precisions = { "fp16":torch.float16,
@@ -104,7 +105,26 @@ def ordering_compute(rows, cols):
     return ordering_best
 
 
+def ordering_rand(rows, cols):
+    ordering = list(range(len(rows)))
+    random.shuffle(ordering)
+    return ordering
 
+
+def ordering_default(rows, cols):
+    ordering = list(range(len(rows)))
+    return ordering
+
+
+def make_ordering(ordering, rows, cols):
+    if ordering=="rand":
+        return ordering_rand(rows, cols)
+    elif ordering=="default":
+        return ordering_default(rows, cols)
+    elif ordering=="compute":
+        return ordering_compute(rows, cols)
+    else:
+        raise Exception(f"Invalid ordering {ordering}")
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -150,6 +170,55 @@ def ttmc_mixed(X, U_list, normalizer, ordering, trial):
         timers["tensor_norm_time"].append(tensor_norm_time)
         timers["matrix_norm_time"].append(matrix_norm_time)
         timers["ttm_time"].append(ttm_time)
+        timers["tensor_recover_time"].append(tensor_recover_time)
+
+    return Y
+
+
+def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
+
+    tensor_norm_time = 0
+    matrix_norm_time = 0
+    ttm_time = 0
+    tensor_recover_time = 0
+    als_time = 0
+
+    N = len(U_list)
+
+    normalizer.reset()
+
+    t1 = time.time()
+    normalizer.init_matrices(X, 50)
+    als_time += (time.time() - t1)
+
+    t1 = time.time()
+    X = normalizer.normalize_tensor(X)
+    tensor_norm_time += (time.time() - t1)
+    Y = X
+
+    for n in range(N):
+
+        mode = ordering[n]
+
+        # Normalize matrix
+        t2 = time.time()
+        U = normalizer.normalize_matrix(U_list[mode], mode)
+        matrix_norm_time += (time.time() - t2)
+
+        # Perform TTM
+        t3 = time.time()
+        Y = tl.tenalg.mode_dot(Y, U, mode)
+        ttm_time += (time.time() - t3)
+
+    t4 = time.time()
+    Y = normalizer.recover_tensor(Y)
+    tensor_recover_time += (time.time() - t4)
+
+    if trial > 0:
+        timers["tensor_norm_time"].append(tensor_norm_time)
+        timers["matrix_norm_time"].append(matrix_norm_time)
+        timers["ttm_time"].append(ttm_time)
+        timers["als_time"].append(als_time)
         timers["tensor_recover_time"].append(tensor_recover_time)
 
     return Y
@@ -210,7 +279,8 @@ if __name__ == "__main__":
     parser.add_argument("--accum", type=str)
     parser.add_argument("--compute", type=str)
     parser.add_argument("--out", type=str)
-    parser.add_argument("--correctness", action='store_true')
+    parser.add_argument("--compute_err", action='store_true')
+    parser.add_argument("--profile", action='store_true')
 
     args = parser.parse_args()
 
@@ -243,23 +313,33 @@ if __name__ == "__main__":
         ttmc_baseline_time = 0
 
         # Determine ordering
-        #ordering = ordering_compute(args.mat_rows, X.shape)
-        ordering = list(range(X.ndim))
-        #random.shuffle(ordering)
+        ordering = make_ordering(args.ordering, args.mat_rows, X.shape)
 
         t9 = time.time()
         Y_correct = tl.tenalg.multi_mode_dot(X, U_list)
         ttmc_baseline_time = (time.time() - t9)
 
         t0 = time.time()
-        Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
+
+        if args.profile:
+            with torch.autograd.profiler.profile(use_device='cuda') as prof:
+                if "kronecker" in args.norm:
+                    Y = ttmc_mixed_als(X, U_list, normalizer, ordering, t)
+                else:
+                    Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
+            print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+        else:
+            if "kronecker" in args.norm:
+                Y = ttmc_mixed_als(X, U_list, normalizer, ordering, t)
+            else:
+                Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
         ttmc_mixed_time = (time.time() - t0)
 
         if t > 0:
             timers["ttmc_mixed_time"].append(ttmc_mixed_time)
             timers["ttmc_baseline_time"].append(ttmc_baseline_time)
 
-        if args.correctness:
+        if args.compute_err:
             f_err = frob_norm_err(Y_correct, Y)
             c_err = componentwise_err(Y_correct, Y)
             print(f"\t[frob_norm]: {f_err}")
@@ -269,9 +349,6 @@ if __name__ == "__main__":
         for i in range(X.ndim):
             U_list[i] = U_list_cpy[i].to(device='cuda:0')
 
-    # Forward Error
-
     print_times()
     print("~"*100)
-
 

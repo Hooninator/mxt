@@ -1,11 +1,43 @@
 import torch
 import numpy as np
+import tensorly as tl
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#            UTILITY FUNCTIONS
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+def diag_scale_tensor_left(X, D):
+    return
+
+def diag_scale_tensor_right(X, D):
+    return
+
+def diag_scale_matrix_left(U, D):
+    return
+
+def diag_scale_matrix_right(U, D):
+    return
+
+
+def tensor_times_kron(X, matrices, alpha, reciprocal):
+    scale = tl.tenalg.kronecker(matrices)
+    scale_v = scale.view(X.shape)
+    if reciprocal:
+        scale_v.reciprocal_()
+    X.mul_(scale_v).mul_(alpha)
+    return X
 
 
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#          STANDARD NORMALIZERS
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-class Normalizer:
-
+class NormalizerStandard:
 
     def __init__(self, order, accum, compute, out, theta):
         self.R_mat =None  
@@ -18,31 +50,16 @@ class Normalizer:
 
 
     def normalize_tensor(self, X, mode):
-        return X.to(self.compute)
+        return X if X.dtype==self.compute else X.to(self.compute)
 
     def normalize_matrix(self, U, mode):
-        return U.to(self.compute)
+        return U if U.dtype==self.compute else U.to(self.compute)
 
     def recover_tensor(self, X, mode):
-        return X.to(self.out)
+        return X if X.dtype==self.out else X.to(self.out)
 
-    def diag_scale_tensor_left(X, D):
-        return
 
-    def diag_scale_tensor_right(X, D):
-        return
-
-    def diag_scale_matrix_left(U, D):
-        return
-
-    def diag_scale_matrix_right(U, D):
-        return
-
-class NormalizerTwoSided(Normalizer):
-
-    def __init__(self, order, accum, compute, out, theta):
-        super().__init__(order, accum, compute, out, theta)
-
+class NormalizerTwoSided(NormalizerStandard):
 
     def normalize_tensor(self, X, mode):
         
@@ -72,12 +89,12 @@ class NormalizerTwoSided(Normalizer):
     def normalize_matrix(self, U, mode):
 
         # Apply R^-1
-        #R = torch.reciprocal(self.R_mat)
         self.R_mat.reciprocal_()
         U.mul_(self.R_mat)
 
         # Make D
         D = U.amax(dim=1).abs_()
+        D.reciprocal_()
 
         # Apply D
         U.mul_(D.unsqueeze(1)).mul_(self.theta)
@@ -110,14 +127,11 @@ class NormalizerTwoSided(Normalizer):
 
 class NormalizerOnceTwoSided(NormalizerTwoSided):
 
-    def __init__(self, order, accum, compute, out, theta):
-        super().__init__(order, accum, compute, out, theta)
-
     def normalize_tensor(self, X, mode):
         if mode==0:
             return super().normalize_tensor(X, mode)
         else:
-            return X.to(self.compute)
+            return X if X.dtype==self.compute else X.to(self.compute)
 
 
     def normalize_matrix(self, U, mode):
@@ -126,6 +140,7 @@ class NormalizerOnceTwoSided(NormalizerTwoSided):
         else:
             # Make D
             D = U.abs().amax(dim=1)
+            D.reciprocal_()
 
             # Apply D
             U = U * D.unsqueeze(1)
@@ -133,27 +148,185 @@ class NormalizerOnceTwoSided(NormalizerTwoSided):
 
             self.D_mat = D
 
-            return U.to(self.compute)
+            return U if U.dtype==self.compute else U.to(self.compute)
 
 
     def recover_tensor(self, X, mode):
         if mode==0:
             return super().recover_tensor(X, mode)
         else:
-            X = X.to(self.out)
+            X = X if X.dtype==self.out else X.to(self.out)
             self.D_mat.reciprocal_()
             X = X * self.D_mat.view([-1 if i==mode else 1 for i in range(X.ndim)])
             X.mul_(1/(self.theta))
             return X
 
 
-class NormalizerALS:
+class NormalizerOneSided(NormalizerTwoSided):
 
-    def __init__(self, order, accum_u, compute_u, out_u):
+    def normalize_tensor(self, X, mode):
+        
+        dims = X.shape
+
+        # Make S (column norm)
+        S = X.amax(dim=mode).abs_()  # no alloc if dim=mode
+        S.reciprocal_()
+
+        # Apply S and theta in one step
+        scale_shape = [dims[i] if i != mode else 1 for i in range(X.ndim)]
+        X.mul_(S.view(scale_shape)).mul_(self.theta)
+
+        self.S_mat = S
+        return X if X.dtype == self.compute else X.to(self.compute)
+
+
+    def normalize_matrix(self, U, mode):
+
+        # Make D
+        D = U.amax(dim=1).abs_()
+        D.reciprocal_()
+
+        # Apply D
+        U.mul_(D.unsqueeze(1)).mul_(self.theta)
+
+        self.D_mat = D
+
+        return U if U.dtype==self.compute else U.to(self.compute)
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#          KRONECKER NORMALIZERS
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+class KroneckerNormalizer:
+
+    def __init__(self, order, accum_u, compute_u, out_u, theta):
         self.order = order
-        self.accum_u = accum_u
-        self.compute_u = compute_u
-        self.out_u = out_u
+        self.accum = accum_u
+        self.compute = compute_u
+        self.out = out_u
+        self.theta = theta
+        self.D_mats = []
+        self.R_mats = []
+
+
+class KroneckerNormalizerDiag(KroneckerNormalizer):
+
+    def normalize_tensor(self, X):
+        X = tensor_times_kron(X, self.D_mats, self.theta, False)
+        return X if X.dtype==self.compute else X.to(self.compute)
+
+
+    def normalize_matrix(self, U, mode):
+
+        self.D_mats[mode].reciprocal_()
+        U.mul_(self.D_mats[mode])
+
+        R = U.amax(dim=1).abs_()
+        R.reciprocal_()
+        U.mul_(R.unsqueeze(1)).mul_(self.theta)
+
+        self.R_mats.append(R)
+
+        return U if U.dtype==self.compute else U.to(self.compute)
+
+
+    def recover_tensor(self, X):
+        X = X if X.dtype==self.out else X.to(self.out)
+        X = tensor_times_kron(X, self.R_mats, 1/(self.theta**(X.ndim + 1)), True)
+        return X
+
+
+    def reset(self):
+        self.D_mats = []
+        self.R_mats = []
+
+
+class NormalizerKroneckerDiagNormal(KroneckerNormalizerDiag):
+
+    def init_matrices(self, X, maxiters):
+        N = X.ndim
+        for i in range(N):
+            D = torch.rand(X.shape[i], device='cuda:0', dtype=X.dtype)
+            self.D_mats.append(D)
+
+
+class NormalizerKroneckerDiagInfNorm(KroneckerNormalizerDiag):
+
+    def init_matrices(self, X, maxiters):
+        N = X.ndim
+        for i in range(N):
+            D = torch.amax(X, dim=[n for n in range(N) if n != i]).to(device='cuda:0', dtype=X.dtype).abs_()
+            D.reciprocal_()
+            row_shape = [-1 if j == i else 1 for j in range(X.ndim)]
+            X.mul_(D.view(row_shape))
+            self.D_mats.append(D)
+        X = tensor_times_kron(X, self.D_mats, 1, True)
+
+
+class NormalizerKroneckerDiagALS(KroneckerNormalizerDiag):
+
+    def init_matrices(self, X, maxiters):
+
+        N = X.ndim
+
+        for i in range(N):
+            D = torch.rand(X.shape[i], device='cuda:0', dtype=X.dtype)
+            self.D_mats.append(D)
+
+        for iter in range(maxiters):
+
+            # Init gamma vectors
+            gamma_vecs = []
+            for n in range(N):
+                gamma = torch.randn(X.shape[n], device='cuda:0', dtype=X.dtype)
+                gamma_vecs.append(gamma)
+
+            # Single ALS Sweep
+            for n in range(N):
+                In = X.shape[n]
+
+                scale = tl.tenalg.kronecker(self.D_mats, skip_matrix=n)
+                scale_v = scale.view([X.shape[i] if i != n else 1 for i in range(N)])
+
+                X.mul_(scale_v)
+                
+                self.D_mats[n] = tl.tenalg.multi_mode_dot(X, gamma_vecs, skip=n)
+
+                s = torch.norm(X, dim=[d for d in range(N) if d != n])
+                s.reciprocal_()
+                self.D_mats[n].mul_(s)
+
+                scale_v.reciprocal_()
+                X.mul_(scale_v)
+
+
+class KroneckerNormalizerGeneral(KroneckerNormalizer):
+
+    def normalize_tensor(self, X):
+        return X if X.dtype==self.compute else X.to(self.compute)
+
+
+    def normalize_matrix(self, U, mode):
+        return U if U.dtype==self.compute else U.to(self.compute)
+
+
+    def recover_tensor(self, X):
+        X = X if X.dtype==self.out else X.to(self.out)
+        return X
+
+
+    def reset(self):
+        self.D_mats = []
+        self.R_mats = []
+
+
+class NormalizerKroneckerGeneralALS(KroneckerNormalizerGeneral):
+
+    def init_matrices(self, X, maxiters):
+        N = X.ndim
 
 
 def make_normalizer(norm, order, accum_u, compute_u, out_u, theta):
@@ -163,6 +336,11 @@ def make_normalizer(norm, order, accum_u, compute_u, out_u, theta):
         return NormalizerTwoSided( order,accum_u, compute_u, out_u, theta)
     elif norm=="once_two_sided":
         return NormalizerOnceTwoSided( order,accum_u, compute_u, out_u, theta)
-    elif norm=="als":
-        return NormalizerALS( order,accum_u, compute_u, out_u, theta)
-
+    elif norm=="one_sided":
+        return NormalizerOneSided( order,accum_u, compute_u, out_u, theta)
+    elif norm=="kronecker_diag_normal":
+        return NormalizerKroneckerDiagNormal( order,accum_u, compute_u, out_u, theta)
+    elif norm=="kronecker_diag_als":
+        return NormalizerKroneckerDiagALS( order,accum_u, compute_u, out_u, theta)
+    elif norm=="kronecker_diag_infnorm":
+        return NormalizerKroneckerDiagInfNorm( order,accum_u, compute_u, out_u, theta)
