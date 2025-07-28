@@ -12,6 +12,8 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     
+    print(f"Generating tensor...")
     vals = torch.randn(size=(args.mode_sizes))
-    write_dns(args.output, vals)
+    print(f"Done")
+    write_dns_fast(args.output, vals)
 

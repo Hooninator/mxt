@@ -1,0 +1,62 @@
+tensors:
+  - "kinetic"
+  - "miranda"
+  - "randn_3"
+  - "randn_4"
+  - "evil_3"
+  - "evil_4"
+
+matrix_gens:
+  - "uniform"
+  - "big"
+  - "evil"
+
+matrix_rows:
+  kinetic:
+    [
+      [100, 100, 100, 100],
+    ]
+  miranda:
+    [
+      [1000, 1000, 1000],
+    ]
+  randn_3:
+    [
+      [1000, 1000, 1000],
+    ]
+  randn_4:
+    [
+      [80, 80, 80, 80],
+    ]
+  evil_3:
+    [
+      [1000, 1000, 1000],
+    ]
+  evil_4:
+    [
+      [80, 80, 80, 80],
+    ]
+
+    
+
+normalizers:
+  - "null"
+  - "two_sided"
+  - "once_two_sided"
+  - "one_sided"
+  - "kronecker_diag_normal"
+  - "kronecker_diag_als"
+  - "kronecker_diag_infnorm"
+
+
+precisions:
+  - "fp64"
+  - "fp32"
+  - "fp16"
+
+      
+orderings:
+  - "default"
+
+
+

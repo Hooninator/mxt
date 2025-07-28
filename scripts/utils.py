@@ -12,6 +12,12 @@ def write_frostt(filename, X):
             file.write(f"{line} {X[tuple(inds[i, :])]:.18f}\n")
 
 
+def write_dns_fast(filename, X):
+    with open(filename, 'w') as file:
+        header=f"{len(X.shape)}\n{' '.join([str(s) for s in X.shape])}\n{torch.numel(X)}"
+    np.savetxt(filename, X.cpu().numpy().reshape(-1), fmt="%.10g", header=header, comments='')
+
+
 def write_dns(filename, X):
     with open(filename, 'w') as file:
         vals = list(X.flatten())

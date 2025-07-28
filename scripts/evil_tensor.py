@@ -40,7 +40,7 @@ def main():
     values = torch.mul(S, values)
 
 
-    write_dns(filename, values)
+    write_dns_fast(filename, values)
 
 if __name__ == "__main__":
     main()

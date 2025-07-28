@@ -295,7 +295,7 @@ class NormalizerKroneckerDiagALS(KroneckerNormalizerDiag):
                 
                 self.D_mats[n] = tl.tenalg.multi_mode_dot(X, gamma_vecs, skip=n)
 
-                s = torch.norm(X, dim=[d for d in range(N) if d != n])
+                s = torch.linalg.vector_norm(X, dim=tuple([d for d in range(N) if d != n]))
                 s.reciprocal_()
                 self.D_mats[n].mul_(s)
 
@@ -331,7 +331,7 @@ class NormalizerKroneckerGeneralALS(KroneckerNormalizerGeneral):
 
 def make_normalizer(norm, order, accum_u, compute_u, out_u, theta):
     if norm=="null":
-        return Normalizer( order,accum_u, compute_u, out_u, theta)
+        return NormalizerStandard( order,accum_u, compute_u, out_u, theta)
     elif norm=="two_sided":
         return NormalizerTwoSided( order,accum_u, compute_u, out_u, theta)
     elif norm=="once_two_sided":

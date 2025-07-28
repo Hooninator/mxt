@@ -1,6 +1,7 @@
 import tensorly as tl
 import numpy as np
 import torch
+import pandas as pd
 
 import os
 import argparse
@@ -25,6 +26,8 @@ timers = {"tensor_norm_time":[],
           "ttmc_mixed_time":[],
           "als_time":[]}
 
+errors = {"f_norm":[],
+          "c_norm":[]}
 
 precisions = { "fp16":torch.float16,
                "fp32":torch.float32,
@@ -73,18 +76,45 @@ def write_dns(filename, X):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def init_matrices(args, rows, cols):
-    if args.mat_init=="unif":
-        return init_matrices_unif(rows, cols, args.alpha, args.out)
+    if args.mat_init=="uniform":
+        return init_matrices_unif(rows, cols, args.out)
+    elif args.mat_init=="big":
+        return init_matrices_big(rows, cols, args.out)
+    elif args.mat_init=="evil":
+        return init_matrices_evil(rows, cols, args.out)
     else:
         raise Exception(f"Invalid init {args.mat_init}")
 
 
-def init_matrices_unif(rows, cols, alpha, out):
+def init_matrices_unif(rows, cols, out):
     matrices = []
     n = len(rows)
     for i in range(n):
         matrices.append(torch.rand(rows[i], cols[i], device='cuda:0', dtype=precisions[out]))
-        matrices[i] = torch.mul(matrices[i], alpha)
+    return matrices
+
+
+def init_matrices_big(rows, cols, out):
+    matrices = []
+    n = len(rows)
+    biggest = torch.finfo(torch.float16).max
+    for i in range(n):
+        matrices.append(torch.randn(rows[i], cols[i], device='cuda:0', dtype=precisions[out]))
+        matrices[i].mul_(biggest)
+    return matrices
+
+
+def init_matrices_evil(rows, cols, out):
+    matrices = []
+    n = len(rows)
+    biggest = torch.finfo(torch.float16).max
+    smallest = torch.finfo(torch.float16).eps
+    for i in range(n):
+        matrices.append(torch.ones(rows[i], cols[i], device='cuda:0', dtype=precisions[out]))
+        matrices[i].mul_(smallest)
+        for j in range(rows[i]):
+            matrices[i][j, 0] = biggest
+        matrices[i].mul_(torch.randn(rows[i], cols[i],device='cuda:0', dtype=precisions[out])) 
     return matrices
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -100,12 +130,11 @@ def ordering_compute(rows, cols):
         pi[i] = (1 / cols[i]) - (1/rows[i])
     ordering = list(range(N))
     ordering_best = [x for _, x in sorted(zip(pi, ordering), key=lambda p: p[0])]
-    print(ordering_best)
-    print(pi)
     return ordering_best
 
 
 def ordering_rand(rows, cols):
+    random.seed(42)
     ordering = list(range(len(rows)))
     random.shuffle(ordering)
     return ordering
@@ -231,15 +260,17 @@ def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
 
 def frob_norm_err(Y_correct, Y_computed):
     Y_correct = Y_correct.to(device='cpu')
-    Y_computed = Y_computed .to(device='cpu')
+    Y_computed = Y_computed.to(device='cpu')
     return (torch.norm(Y_correct - Y_computed)) / torch.norm(Y_correct)
 
 
 def componentwise_err(Y_correct, Y_computed):
     Y_correct = Y_correct.to(device='cpu')
-    Y_computed = Y_computed .to(device='cpu')
+    Y_computed = Y_computed.to(device='cpu')
     err = torch.abs((Y_correct - Y_computed)) 
-    return torch.max(err)
+    ind = torch.unravel_index(torch.argmax(err), Y_correct.shape)
+    return err[ind] / torch.abs(Y_correct[ind])
+
 
 
 
@@ -257,7 +288,7 @@ def set_torch_flags(args):
 
 
 def arg_to_str(args):
-    return
+    return f"{args.tensor}_{args.ordering}_{args.mat_init}_{args.norm}_{args.compute}_{'x'.join(map(str, args.mat_rows))}"
 
 
 def print_times():
@@ -266,38 +297,42 @@ def print_times():
         print(f"\t[{timer}]: {sum(timers[timer])}s")
 
 
-if __name__ == "__main__":
+def prune_empty(d):
+    to_del = []
+    for k in d:
+        if len(d[k])==0:
+            to_del.append(k)
+    for k in to_del:
+        del d[k]
+    return d
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--tensor", type=str)
-    parser.add_argument("--ordering", type=str)
-    parser.add_argument("--ntrials", type=int, default=10)
-    parser.add_argument("--mat_rows", type=int, nargs='+')
-    parser.add_argument("--mat_init", type=str)
-    parser.add_argument("--alpha", type=float, default=1.0)
-    parser.add_argument("--norm", type=str)
-    parser.add_argument("--accum", type=str)
-    parser.add_argument("--compute", type=str)
-    parser.add_argument("--out", type=str)
-    parser.add_argument("--compute_err", action='store_true')
-    parser.add_argument("--profile", action='store_true')
 
-    args = parser.parse_args()
+def write_metrics(args):
 
-    tl.set_backend('pytorch')
-    set_torch_flags(args)
+    global timers
+    global errors
 
-    print("~"*100)
-    print(f"Running {args.tensor}")
+    fname = arg_to_str(args)
 
-    # Set up inputs 
-    X = read_tensor(args.tensor, args.out)
-    U_list = init_matrices(args, args.mat_rows, X.shape)
+    if not os.path.isdir(f"./data/{args.tensor}"):
+        os.mkdir(f"./data/{args.tensor}")
+    
+    timers = prune_empty(timers)
+    errors = prune_empty(errors)
+
+    print(timers)
+    timing_df = pd.DataFrame(timers)
+    err_df = pd.DataFrame(errors)
+
+    timing_df.to_csv(f"./data/{args.tensor}/{fname}_timing.csv")
+    err_df.to_csv(f"./data/{args.tensor}/{fname}_err.csv")
+
+
+def main(X, U_list, args):
 
     # Normalizer
     theta = 0.1
     normalizer = make_normalizer(args.norm, X.ndim, precisions[args.accum], precisions[args.compute], precisions[args.out], theta)
-
 
     # Run TTMc
     for t in range(args.ntrials):
@@ -339,16 +374,49 @@ if __name__ == "__main__":
             timers["ttmc_mixed_time"].append(ttmc_mixed_time)
             timers["ttmc_baseline_time"].append(ttmc_baseline_time)
 
-        if args.compute_err:
-            f_err = frob_norm_err(Y_correct, Y)
-            c_err = componentwise_err(Y_correct, Y)
-            print(f"\t[frob_norm]: {f_err}")
-            print(f"\t[comp_norm]: {c_err}")
+        c_err = componentwise_err(Y_correct, Y)
+        f_err = frob_norm_err(Y_correct, Y)
+        errors["f_norm"].append(f_err.item())
+        errors["c_norm"].append(c_err.item())
+        print(f"\t[frob_norm]: {f_err}")
+        print(f"\t[comp_norm]: {c_err}")
 
         X = X_cpy.to(device='cuda:0')
         for i in range(X.ndim):
             U_list[i] = U_list_cpy[i].to(device='cuda:0')
 
     print_times()
+    write_metrics(args)
+
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tensor", type=str)
+    parser.add_argument("--ordering", type=str)
+    parser.add_argument("--ntrials", type=int, default=10)
+    parser.add_argument("--mat_rows", type=int, nargs='+')
+    parser.add_argument("--mat_init", type=str)
+    parser.add_argument("--norm", type=str)
+    parser.add_argument("--accum", type=str)
+    parser.add_argument("--compute", type=str)
+    parser.add_argument("--out", type=str)
+    parser.add_argument("--profile", action='store_true')
+
+    args = parser.parse_args()
+
+    tl.set_backend('pytorch')
+    set_torch_flags(args)
+
+    print("~"*100)
+    print(f"Running {args.tensor}")
+
+    # Set up inputs 
+
+    X = read_tensor(args.tensor, "fp64")
+    U_list = init_matrices(args, args.mat_rows, X.shape)
+    main(X, U_list, args)
+
     print("~"*100)
 

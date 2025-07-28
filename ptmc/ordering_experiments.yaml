@@ -1,0 +1,47 @@
+tensors:
+  - "kinetic"
+  - "miranda"
+  - "evil_4"
+  - "randn_4"
+
+
+matrix_gens:
+  - "uniform"
+  - "big"
+
+
+matrix_rows:
+  kinetic:
+    [
+      [100, 100, 100, 100],
+      [4, 100, 50, 80]
+    ]
+  miranda:
+    [
+      [1000, 1000, 1000],
+      [50, 100, 1000]
+    ]
+  evil_4:
+    [
+      [80, 80, 80, 80],
+      [10, 20, 40, 60]
+    ]
+  randn_4:
+    [
+      [80, 80, 80, 80],
+      [10, 20, 40, 60]
+    ]
+
+
+normalizers:
+  - "two_sided"
+
+
+precisions:
+  - "fp64"
+  - "fp32"
+  - "fp16"
+
+orderings:
+  - "rand"
+  - "compute"
