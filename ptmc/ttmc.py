@@ -133,8 +133,8 @@ def ordering_compute(rows, cols):
     return ordering_best
 
 
-def ordering_rand(rows, cols):
-    random.seed(42)
+def ordering_rand(rows, cols, t):
+    random.seed(t)
     ordering = list(range(len(rows)))
     random.shuffle(ordering)
     return ordering
@@ -145,9 +145,9 @@ def ordering_default(rows, cols):
     return ordering
 
 
-def make_ordering(ordering, rows, cols):
+def make_ordering(ordering, rows, cols, t):
     if ordering=="rand":
-        return ordering_rand(rows, cols)
+        return ordering_rand(rows, cols, t)
     elif ordering=="default":
         return ordering_default(rows, cols)
     elif ordering=="compute":
@@ -297,13 +297,16 @@ def print_times():
         print(f"\t[{timer}]: {sum(timers[timer])}s")
 
 
-def prune_empty(d):
+def fill_empty(d):
     to_del = []
+    m = 0
     for k in d:
+        m = max(m, len(d[k]))
         if len(d[k])==0:
             to_del.append(k)
     for k in to_del:
-        del d[k]
+        d[k] = [0]*m
+
     return d
 
 
@@ -314,18 +317,28 @@ def write_metrics(args):
 
     fname = arg_to_str(args)
 
-    if not os.path.isdir(f"./data/{args.tensor}"):
-        os.mkdir(f"./data/{args.tensor}")
+    if not os.path.isdir(f"./data_{args.dir}/{args.tensor}"):
+        os.mkdir(f"./data_{args.dir}/{args.tensor}")
     
-    timers = prune_empty(timers)
-    errors = prune_empty(errors)
+    timers = fill_empty(timers)
+    errors = fill_empty(errors)
 
     print(timers)
     timing_df = pd.DataFrame(timers)
     err_df = pd.DataFrame(errors)
 
-    timing_df.to_csv(f"./data/{args.tensor}/{fname}_timing.csv")
-    err_df.to_csv(f"./data/{args.tensor}/{fname}_err.csv")
+    timing_df.to_csv(f"./data_{args.dir}/{args.tensor}/{fname}_timing.csv")
+    err_df.to_csv(f"./data_{args.dir}/{args.tensor}/{fname}_err.csv")
+
+
+def reset_metrics():
+    global timers
+    global errors
+
+    for k in timers:
+        timers[k] = []
+    for k in errors:
+        errors[k] = []
 
 
 def main(X, U_list, args):
@@ -348,7 +361,7 @@ def main(X, U_list, args):
         ttmc_baseline_time = 0
 
         # Determine ordering
-        ordering = make_ordering(args.ordering, args.mat_rows, X.shape)
+        ordering = make_ordering(args.ordering, args.mat_rows, X.shape, t)
 
         t9 = time.time()
         Y_correct = tl.tenalg.multi_mode_dot(X, U_list)
@@ -386,7 +399,11 @@ def main(X, U_list, args):
             U_list[i] = U_list_cpy[i].to(device='cuda:0')
 
     print_times()
-    write_metrics(args)
+
+    if args.dir:
+        write_metrics(args)
+
+    reset_metrics()
 
 
 
@@ -402,6 +419,7 @@ if __name__ == "__main__":
     parser.add_argument("--accum", type=str)
     parser.add_argument("--compute", type=str)
     parser.add_argument("--out", type=str)
+    parser.add_argument("--dir", type=str)
     parser.add_argument("--profile", action='store_true')
 
     args = parser.parse_args()

@@ -67,6 +67,7 @@ class NormalizerTwoSided(NormalizerStandard):
 
         # Make S (column norm)
         S = X.amax(dim=mode).abs_()  # no alloc if dim=mode
+        S[S==0] = 1
         S.reciprocal_()
 
         # Apply S and theta in one step
@@ -75,6 +76,7 @@ class NormalizerTwoSided(NormalizerStandard):
 
         # Make R (row norm)
         R = X.amax(dim=[i for i in range(X.ndim) if i != mode]).abs_()
+        R[R==0] = 1
         R.reciprocal_()
 
         # Apply R in-place
@@ -170,6 +172,7 @@ class NormalizerOneSided(NormalizerTwoSided):
 
         # Make S (column norm)
         S = X.amax(dim=mode).abs_()  # no alloc if dim=mode
+        S[S==0] = 1
         S.reciprocal_()
 
         # Apply S and theta in one step
@@ -259,6 +262,7 @@ class NormalizerKroneckerDiagInfNorm(KroneckerNormalizerDiag):
         N = X.ndim
         for i in range(N):
             D = torch.amax(X, dim=[n for n in range(N) if n != i]).to(device='cuda:0', dtype=X.dtype).abs_()
+            D[D==0] = 1
             D.reciprocal_()
             row_shape = [-1 if j == i else 1 for j in range(X.ndim)]
             X.mul_(D.view(row_shape))

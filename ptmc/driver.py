@@ -24,10 +24,12 @@ class Config:
     accum:str
     compute:str
     out:str
-    profile: bool = False
+    profile: bool
+    dir: str
 
-def build_config(tensor, matrix_gen, matrix_row, normalizer, precision, ordering):
-    config = Config(tensor, ordering, 10, matrix_row, matrix_gen, normalizer, precision, precision, "fp64")
+
+def build_config(tensor, matrix_gen, matrix_row, normalizer, precision, ordering, dir):
+    config = Config(tensor, ordering, 10, matrix_row, matrix_gen, normalizer, precision, precision, "fp64", False, dir)
     return config
 
 
@@ -35,6 +37,7 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--file", type=str)
+    parser.add_argument("--dir", type=str)
 
     args = parser.parse_args()
 
@@ -60,11 +63,11 @@ if __name__=="__main__":
                         for precision in precisions:
                             for ordering in orderings:
 
-                                config = build_config(tensor, matrix_gen, matrix_row, normalizer, precision, ordering)
+                                config = build_config(tensor, matrix_gen, matrix_row, normalizer, precision, ordering, args.dir)
 
                                 filestr = f"{tensor}_{ordering}_{matrix_gen}_{normalizer}_{precision}_{'x'.join(map(str, matrix_row))}"
 
-                                if os.path.exists(f"./data/{tensor}/{filestr}_timing.csv"):
+                                if os.path.exists(f"./data_{args.dir}/{tensor}/{filestr}_timing.csv"):
                                     print(f"{config} already run")
                                     continue
 
