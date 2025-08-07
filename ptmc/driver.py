@@ -51,12 +51,20 @@ if __name__=="__main__":
         normalizers = configs["normalizers"]
         precisions = configs["precisions"]
         orderings = configs["orderings"]
+        skip = configs["skip"]
 
         for tensor in tensors:
+
+            if tensor in skip:
+                print(f"Skipping {tensor}")
+                continue
+
             matrix_rows = matrix_rows_all[tensor]
+
             print(f"Reading {tensor}")
             X = read_tensor(tensor, "fp64")
             print("Done")
+
             for matrix_gen in matrix_gens:
                 for matrix_row in matrix_rows:
                     for normalizer in normalizers:

@@ -66,7 +66,7 @@ class NormalizerTwoSided(NormalizerStandard):
         dims = X.shape
 
         # Make S (column norm)
-        S = X.amax(dim=mode).abs_()  # no alloc if dim=mode
+        S = torch.abs(X).amax(dim=mode)
         S[S==0] = 1
         S.reciprocal_()
 
@@ -75,7 +75,7 @@ class NormalizerTwoSided(NormalizerStandard):
         X.mul_(S.view(scale_shape)).mul_(self.theta)
 
         # Make R (row norm)
-        R = X.amax(dim=[i for i in range(X.ndim) if i != mode]).abs_()
+        R = torch.abs(X).amax(dim=[i for i in range(X.ndim) if i != mode])
         R[R==0] = 1
         R.reciprocal_()
 
@@ -95,7 +95,7 @@ class NormalizerTwoSided(NormalizerStandard):
         U.mul_(self.R_mat)
 
         # Make D
-        D = U.amax(dim=1).abs_()
+        D = torch.abs(U).amax(dim=1)
         D.reciprocal_()
 
         # Apply D
@@ -171,7 +171,7 @@ class NormalizerOneSided(NormalizerTwoSided):
         dims = X.shape
 
         # Make S (column norm)
-        S = X.amax(dim=mode).abs_()  # no alloc if dim=mode
+        S = torch.abs(X).amax(dim=mode)
         S[S==0] = 1
         S.reciprocal_()
 
@@ -186,7 +186,7 @@ class NormalizerOneSided(NormalizerTwoSided):
     def normalize_matrix(self, U, mode):
 
         # Make D
-        D = U.amax(dim=1).abs_()
+        D = U.abs().amax(dim=1)
         D.reciprocal_()
 
         # Apply D
@@ -222,12 +222,17 @@ class KroneckerNormalizerDiag(KroneckerNormalizer):
         return X if X.dtype==self.compute else X.to(self.compute)
 
 
+    def normalize_matrices(self, U_list):
+        N = len(U_list)
+        return [self.normalize_matrix(U_list[n], n) for n in range(N)]
+
+
     def normalize_matrix(self, U, mode):
 
         self.D_mats[mode].reciprocal_()
         U.mul_(self.D_mats[mode])
 
-        R = U.amax(dim=1).abs_()
+        R = U.abs().amax(dim=1)
         R.reciprocal_()
         U.mul_(R.unsqueeze(1)).mul_(self.theta)
 
@@ -261,7 +266,7 @@ class NormalizerKroneckerDiagInfNorm(KroneckerNormalizerDiag):
     def init_matrices(self, X, maxiters):
         N = X.ndim
         for i in range(N):
-            D = torch.amax(X, dim=[n for n in range(N) if n != i]).to(device='cuda:0', dtype=X.dtype).abs_()
+            D = torch.abs(X).amax(dim=[n for n in range(N) if n != i]).to(device='cuda:0', dtype=X.dtype)
             D[D==0] = 1
             D.reciprocal_()
             row_shape = [-1 if j == i else 1 for j in range(X.ndim)]
@@ -307,6 +312,38 @@ class NormalizerKroneckerDiagALS(KroneckerNormalizerDiag):
                 X.mul_(scale_v)
 
 
+class NormalizerKroneckerDiagOnce(KroneckerNormalizerDiag):
+
+    def init_matrices(self, X, maxiters):
+        N = X.ndim
+        D = torch.abs(X).amax(dim=[n for n in range(N) if n != 0]).to(device='cuda:0', dtype=X.dtype)
+        D[D==0] = 1
+        D.reciprocal_()
+        self.D_mats.append(D)
+
+
+    def normalize_tensor(self, X):
+        row_shape = [-1 if i == 0 else 1 for i in range(X.ndim)]
+        X.mul_(self.D_mats[0].view(row_shape)).mul_(self.theta)
+        return X if X.dtype==self.compute else X.to(self.compute)
+
+
+    def normalize_matrix(self, U, mode):
+
+        if mode==0:
+            self.D_mats[mode].reciprocal_()
+            U.mul_(self.D_mats[mode])
+
+        R = torch.abs(U).amax(dim=1)
+        R.reciprocal_()
+        U.mul_(R.unsqueeze(1)).mul_(self.theta)
+
+        self.R_mats.append(R)
+
+        return U if U.dtype==self.compute else U.to(self.compute)
+
+
+
 class KroneckerNormalizerGeneral(KroneckerNormalizer):
 
     def normalize_tensor(self, X):
@@ -348,3 +385,5 @@ def make_normalizer(norm, order, accum_u, compute_u, out_u, theta):
         return NormalizerKroneckerDiagALS( order,accum_u, compute_u, out_u, theta)
     elif norm=="kronecker_diag_infnorm":
         return NormalizerKroneckerDiagInfNorm( order,accum_u, compute_u, out_u, theta)
+    elif norm=="kronecker_diag_once":
+        return NormalizerKroneckerDiagOnce( order,accum_u, compute_u, out_u, theta)

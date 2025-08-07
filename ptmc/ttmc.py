@@ -98,6 +98,10 @@ def init_matrices_big(rows, cols, out):
     matrices = []
     n = len(rows)
     biggest = torch.finfo(torch.float16).max
+    torch.manual_seed(45)
+    torch.cuda.manual_seed(45)
+    np.random.seed(45)
+    random.seed(45)
     for i in range(n):
         matrices.append(torch.randn(rows[i], cols[i], device='cuda:0', dtype=precisions[out]))
         matrices[i].mul_(biggest)
@@ -122,6 +126,12 @@ def init_matrices_evil(rows, cols, out):
 #                  Ordering
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+def ordering_smallest_shared(rows, cols):
+    N = len(rows)
+    ordering = list(range(N))
+    return [x for _, x in sorted(zip(rows, ordering), key=lambda p: p[0])]
+
 
 def ordering_compute(rows, cols):
     N = len(rows)
@@ -152,6 +162,8 @@ def make_ordering(ordering, rows, cols, t):
         return ordering_default(rows, cols)
     elif ordering=="compute":
         return ordering_compute(rows, cols)
+    elif ordering=="smallest_shared":
+        return ordering_smallest_shared(rows, cols)
     else:
         raise Exception(f"Invalid ordering {ordering}")
 
@@ -217,7 +229,7 @@ def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
     normalizer.reset()
 
     t1 = time.time()
-    normalizer.init_matrices(X, 50)
+    normalizer.init_matrices(X, 1)
     als_time += (time.time() - t1)
 
     t1 = time.time()
@@ -225,14 +237,15 @@ def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
     tensor_norm_time += (time.time() - t1)
     Y = X
 
+    # Normalize matrices
+    t2 = time.time()
+    U_list = normalizer.normalize_matrices(U_list)
+    matrix_norm_time += (time.time() - t2)
+
     for n in range(N):
 
         mode = ordering[n]
-
-        # Normalize matrix
-        t2 = time.time()
-        U = normalizer.normalize_matrix(U_list[mode], mode)
-        matrix_norm_time += (time.time() - t2)
+        U = U_list[mode]
 
         # Perform TTM
         t3 = time.time()
@@ -282,7 +295,8 @@ def componentwise_err(Y_correct, Y_computed):
 
 def set_torch_flags(args):
     if args.accum=="fp16":
-        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+        torch.backends.cuda.matmul.allow_fp16_accumulation = True
+        #torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
     if args.accum=="fp32":
         torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -363,10 +377,6 @@ def main(X, U_list, args):
         # Determine ordering
         ordering = make_ordering(args.ordering, args.mat_rows, X.shape, t)
 
-        t9 = time.time()
-        Y_correct = tl.tenalg.multi_mode_dot(X, U_list)
-        ttmc_baseline_time = (time.time() - t9)
-
         t0 = time.time()
 
         if args.profile:
@@ -383,6 +393,15 @@ def main(X, U_list, args):
                 Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
         ttmc_mixed_time = (time.time() - t0)
 
+
+        X = X_cpy.to(device='cuda:0')
+        for i in range(X.ndim):
+            U_list[i] = U_list_cpy[i].to(device='cuda:0')
+
+        t9 = time.time()
+        Y_correct = tl.tenalg.multi_mode_dot(X, U_list)
+        ttmc_baseline_time = (time.time() - t9)
+
         if t > 0:
             timers["ttmc_mixed_time"].append(ttmc_mixed_time)
             timers["ttmc_baseline_time"].append(ttmc_baseline_time)
@@ -394,9 +413,6 @@ def main(X, U_list, args):
         print(f"\t[frob_norm]: {f_err}")
         print(f"\t[comp_norm]: {c_err}")
 
-        X = X_cpy.to(device='cuda:0')
-        for i in range(X.ndim):
-            U_list[i] = U_list_cpy[i].to(device='cuda:0')
 
     print_times()
 
