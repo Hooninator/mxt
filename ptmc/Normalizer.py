@@ -243,8 +243,12 @@ class KroneckerNormalizerDiag(KroneckerNormalizer):
 
     def recover_tensor(self, X):
         X = X if X.dtype==self.out else X.to(self.out)
-        X = tensor_times_kron(X, self.R_mats, 1/(self.theta**(X.ndim + 1)), True)
-        return X
+        for mode, d in enumerate(self.R_mats):
+            # Reshape d to be broadcastable to X
+            shape = [1] * X.ndim
+            shape[mode] = -1
+            X = X * d.view(shape).reciprocal_()
+        return X * 1/(self.theta**(X.ndim + 1))
 
 
     def reset(self):

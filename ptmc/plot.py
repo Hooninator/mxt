@@ -127,7 +127,8 @@ def plot_norms_tensor(tensor_configs, tensor):
                 "two_sided": "steelblue",
                 "one_sided": "navy",
                 "kronecker_diag_normal": "lime",
-                "kronecker_diag_als": "bisque"}
+                "kronecker_diag_als": "bisque",
+                "kronecker_diag_once": "firebrick"}
 
         for norm in df["norm"].unique():
             df_this = df[df["norm"]==norm].sort_values(by="matrix_gen")
@@ -192,10 +193,10 @@ def plot_timing_tensor(tensor_configs, tensor):
     for precision in precisions:
         this_configs = filter_configs(tensor_configs, ("precision", precision), ("matrix_gen", "uniform"))
         for config in this_configs:
-            df_dict["normalization_time"].append((this_configs[config]["tensor_recover_time"] + this_configs[config]["tensor_norm_time"] + this_configs[config]["matrix_norm_time"]).mean())
-            df_dict["ttm_time"].append(this_configs[config]["ttm_time"].mean())
-            df_dict["ttmc_baseline_time"].append(this_configs[config]["ttmc_baseline_time"].mean())
-            df_dict["als_time"].append(this_configs[config]["als_time"].mean())
+            df_dict["normalization_time"].append((this_configs[config]["tensor_recover_time"] + this_configs[config]["tensor_norm_time"] + this_configs[config]["matrix_norm_time"]).sum())
+            df_dict["ttm_time"].append(this_configs[config]["ttm_time"].sum())
+            df_dict["ttmc_baseline_time"].append(this_configs[config]["ttmc_baseline_time"].sum())
+            df_dict["als_time"].append(this_configs[config]["als_time"].sum())
             df_dict["norm"].append(config.norm)
             df_dict["precision"].append(config.precision)
 

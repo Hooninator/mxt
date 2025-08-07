@@ -191,20 +191,24 @@ def ttmc_mixed(X, U_list, normalizer, ordering, trial):
         # Normalize operands
         t1 = time.time()
         Y = normalizer.normalize_tensor(Y, mode)
+        torch.cuda.synchronize()
         tensor_norm_time += (time.time() - t1)
 
         t2 = time.time()
         U = normalizer.normalize_matrix(U_list[mode], mode)
+        torch.cuda.synchronize()
         matrix_norm_time += (time.time() - t2)
 
         # Perform TTM
         t3 = time.time()
         Y = tl.tenalg.mode_dot(Y, U, mode)
+        torch.cuda.synchronize()
         ttm_time += (time.time() - t3)
 
         # Recover output
         t4 = time.time()
         Y = normalizer.recover_tensor(Y, mode)
+        torch.cuda.synchronize()
         tensor_recover_time += (time.time() - t4)
 
     if trial > 0:
@@ -230,16 +234,19 @@ def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
 
     t1 = time.time()
     normalizer.init_matrices(X, 1)
+    torch.cuda.synchronize()
     als_time += (time.time() - t1)
 
     t1 = time.time()
     X = normalizer.normalize_tensor(X)
+    torch.cuda.synchronize()
     tensor_norm_time += (time.time() - t1)
     Y = X
 
     # Normalize matrices
     t2 = time.time()
     U_list = normalizer.normalize_matrices(U_list)
+    torch.cuda.synchronize()
     matrix_norm_time += (time.time() - t2)
 
     for n in range(N):
@@ -250,10 +257,12 @@ def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
         # Perform TTM
         t3 = time.time()
         Y = tl.tenalg.mode_dot(Y, U, mode)
+        torch.cuda.synchronize()
         ttm_time += (time.time() - t3)
 
     t4 = time.time()
     Y = normalizer.recover_tensor(Y)
+    torch.cuda.synchronize()
     tensor_recover_time += (time.time() - t4)
 
     if trial > 0:
@@ -391,6 +400,7 @@ def main(X, U_list, args):
                 Y = ttmc_mixed_als(X, U_list, normalizer, ordering, t)
             else:
                 Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
+        torch.cuda.synchronize()
         ttmc_mixed_time = (time.time() - t0)
 
 
@@ -400,6 +410,7 @@ def main(X, U_list, args):
 
         t9 = time.time()
         Y_correct = tl.tenalg.multi_mode_dot(X, U_list)
+        torch.cuda.synchronize()
         ttmc_baseline_time = (time.time() - t9)
 
         if t > 0:
