@@ -36,12 +36,19 @@ def parse_configs(path):
         if tensor=="randn" or tensor=="evil":
             tensor += f"_{stuff[1]}"
             del stuff[1]
-        ordering = stuff[1]
-        matrix_gen = stuff[2]
+        if "smallest_shared" in file:
+            k = 3
+            ordering = "smallest_shared"
+        else:
+            k = 2
+            ordering = stuff[1]
+
+        matrix_gen = stuff[k]
+
         # Stupid idiot
         norm =""
         j = 0
-        for i in range(3, len(stuff)):
+        for i in range(k+1, len(stuff)):
             j = i
             if "fp" in stuff[i]:
                 norm = norm[:-1]
@@ -52,6 +59,7 @@ def parse_configs(path):
         kind = stuff[j+2]
 
         config = Config(tensor, ordering, matrix_gen, norm, precision, rows)
+        print(config)
 
         df = pd.read_csv(f"{path}/{file}")
         if "als_time" not in df.columns:
@@ -234,8 +242,48 @@ def plot_timing(dir):
     for tensor in tensors:
         path = f"{dir}/{tensor}"
         _, tensor_configs = parse_configs(path)
-        plot_timing_tensor(tensor_configs, tensor)
+        plot_timing_tensor2(tensor_configs, tensor)
         
+
+def plot_timing_tensor2(tensor_configs, tensor):
+    mat_rows = get_all_uq(tensor_configs, "rows")
+    if not os.path.isdir(f"./plots/timing/{tensor}"):
+        os.mkdir(f"./plots/timing/{tensor}")
+
+    for row in mat_rows:
+        print(f"Plotting {tensor} {row}")
+        plt.grid(True, axis='both', linestyle='-',
+                 color='gray', alpha=0.5, zorder=1)
+        df_dict = defaultdict(list)
+
+        fp16_config_one_sided = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "one_sided")).keys())[0]
+        fp16_config_kronecker_once = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "kronecker_diag_once")).keys())[0]
+        fp16_config_kronecker_inf = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "kronecker_diag_infnorm")).keys())[0]
+        fp64_config = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp64"), ("matrix_gen", "uniform"), ("norm", "null")).keys())[0]
+
+        phases = {"tensor_norm_time", "matrix_norm_time", "tensor_recover_time", "als_time", "ttm_time"}
+
+        x_labels = ["fp64", "fp16_one_sided", "fp16_kron_once", "fp16_kron_inf"]
+        x = np.arange(len(x_labels))
+        bottom = np.zeros(len(x_labels))
+        for phase in phases:
+            y = np.array([tensor_configs[fp64_config][phase].sum(), 
+                 tensor_configs[fp16_config_one_sided][phase].sum(),
+                 tensor_configs[fp16_config_kronecker_once][phase].sum(),
+                 tensor_configs[fp16_config_kronecker_inf][phase].sum()]) * 1e3
+            if phase=="als_time":
+                phase = "init_time"
+            plt.bar(x, y, label=phase, edgecolor='black', zorder=2, bottom=bottom)
+            bottom += y
+
+        plt.ylabel("Runtime (ms)")
+        plt.xticks(x, labels=x_labels)
+        plt.title(f"Runtime Breakdown for {tensor} with Output Size {row}")
+        plt.legend()
+        plt.savefig(f"./plots/timing/{tensor}/{tensor}_{row}_timing")
+        plt.clf()
+        
+
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -257,25 +305,22 @@ def plot_ordering_tensor(tensor_configs, tensor):
         df_dict = defaultdict(list)
         this_configs = filter_configs(tensor_configs, ("rows", row), ("ordering", "rand"), ("precision", "fp16"))
         for config in this_configs:
-            df_dict[config.matrix_gen] = this_configs[config]["c_norm"]
+            df_dict[config.matrix_gen] = this_configs[config]["f_norm"]
 
         df = pd.DataFrame(df_dict)
         df.fillna(1, inplace=True)
         
         x = np.arange(len(df["uniform"]))
         y = df["uniform"]
-        plt.plot(x, y, label="uniform", marker='x', color='steelblue')
+        plt.plot(x, y, label="random", marker='x', color='steelblue')
 
-        plt.yscale("log") 
+        this_configs = list(filter_configs(tensor_configs, ("rows", row), ("ordering", "smallest_shared"), ("precision", "fp16"), ("matrix_gen", "uniform")))[0]
+        print(this_configs)
+        y = tensor_configs[this_configs]["f_norm"]
+        plt.plot(x, y, label="smallest_shared", linestyle="--", color='limegreen')
+        plt.title(f"Forbenius Norm Error for {tensor} -- Output Size {row}")
+        plt.xlabel("Trial")
         plt.ylabel("Error")
-        plt.xlabel("Multiplication Ordering")
-        plt.title(f"Componentwise Errors for {tensor} with Output Size {row}")
-        plt.legend()
-        plt.savefig(f"./plots/ordering/{tensor}/{tensor}_{row}_ordering_unif")
-
-        x = np.arange(len(df["big"]))
-        y = df["big"]
-        plt.plot(x, y, label="big", marker='x', color='crimson')
         plt.legend()
 
         plt.savefig(f"./plots/ordering/{tensor}/{tensor}_{row}_ordering")

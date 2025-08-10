@@ -98,10 +98,6 @@ def init_matrices_big(rows, cols, out):
     matrices = []
     n = len(rows)
     biggest = torch.finfo(torch.float16).max
-    torch.manual_seed(45)
-    torch.cuda.manual_seed(45)
-    np.random.seed(45)
-    random.seed(45)
     for i in range(n):
         matrices.append(torch.randn(rows[i], cols[i], device='cuda:0', dtype=precisions[out]))
         matrices[i].mul_(biggest)
@@ -220,7 +216,7 @@ def ttmc_mixed(X, U_list, normalizer, ordering, trial):
     return Y
 
 
-def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
+def ttmc_mixed_kron(X, U_list, normalizer, ordering, trial):
 
     tensor_norm_time = 0
     matrix_norm_time = 0
@@ -245,6 +241,7 @@ def ttmc_mixed_als(X, U_list, normalizer, ordering, trial):
 
     # Normalize matrices
     t2 = time.time()
+    print("normalizing")
     U_list = normalizer.normalize_matrices(U_list)
     torch.cuda.synchronize()
     matrix_norm_time += (time.time() - t2)
@@ -385,21 +382,13 @@ def main(X, U_list, args):
 
         # Determine ordering
         ordering = make_ordering(args.ordering, args.mat_rows, X.shape, t)
+        print(f"Ordering: {ordering}")
 
         t0 = time.time()
-
-        if args.profile:
-            with torch.autograd.profiler.profile(use_device='cuda') as prof:
-                if "kronecker" in args.norm:
-                    Y = ttmc_mixed_als(X, U_list, normalizer, ordering, t)
-                else:
-                    Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
-            print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+        if "kronecker" in args.norm:
+            Y = ttmc_mixed_kron(X, U_list, normalizer, ordering, t)
         else:
-            if "kronecker" in args.norm:
-                Y = ttmc_mixed_als(X, U_list, normalizer, ordering, t)
-            else:
-                Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
+            Y = ttmc_mixed(X, U_list, normalizer, ordering, t)
         torch.cuda.synchronize()
         ttmc_mixed_time = (time.time() - t0)
 
@@ -447,12 +436,17 @@ if __name__ == "__main__":
     parser.add_argument("--compute", type=str)
     parser.add_argument("--out", type=str)
     parser.add_argument("--dir", type=str)
-    parser.add_argument("--profile", action='store_true')
 
     args = parser.parse_args()
 
     tl.set_backend('pytorch')
     set_torch_flags(args)
+
+    # Seed
+    torch.manual_seed(45)
+    torch.cuda.manual_seed(45)
+    np.random.seed(45)
+    random.seed(45)
 
     print("~"*100)
     print(f"Running {args.tensor}")

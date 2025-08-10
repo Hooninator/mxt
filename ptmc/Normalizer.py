@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import tensorly as tl
+import recover_kron_norm 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -224,6 +225,7 @@ class KroneckerNormalizerDiag(KroneckerNormalizer):
 
     def normalize_matrices(self, U_list):
         N = len(U_list)
+        print(N)
         return [self.normalize_matrix(U_list[n], n) for n in range(N)]
 
 
@@ -236,19 +238,21 @@ class KroneckerNormalizerDiag(KroneckerNormalizer):
         R.reciprocal_()
         U.mul_(R.unsqueeze(1)).mul_(self.theta)
 
-        self.R_mats.append(R)
-
         return U if U.dtype==self.compute else U.to(self.compute)
 
 
     def recover_tensor(self, X):
+        #X = recover_kron_norm.diag_unscale_forward(X, self.R_mats, 1/(self.theta**(X.ndim + 1)), True, self.out)
         X = X if X.dtype==self.out else X.to(self.out)
         for mode, d in enumerate(self.R_mats):
             # Reshape d to be broadcastable to X
             shape = [1] * X.ndim
             shape[mode] = -1
-            X = X * d.view(shape).reciprocal_()
-        return X * 1/(self.theta**(X.ndim + 1))
+            if mode==0:
+                X = X * (d.view(shape) * (1/self.theta**(X.ndim+1)))
+            else:
+                X = X * d.view(shape) 
+        return X 
 
 
     def reset(self):
@@ -341,6 +345,7 @@ class NormalizerKroneckerDiagOnce(KroneckerNormalizerDiag):
         R = torch.abs(U).amax(dim=1)
         R.reciprocal_()
         U.mul_(R.unsqueeze(1)).mul_(self.theta)
+        R.reciprocal_()
 
         self.R_mats.append(R)
 
