@@ -35,19 +35,15 @@ precisions = { "fp16":torch.float16,
 
 
 def read_tensor(name, u):
-    tensor = []
+    # Read shape first
     with open(f"{base}{name}.dns", 'r') as file:
-        nu = 0
-        i = 0
-        for entry in file:
-            nu += 1
-            if nu==2:
-                shape = list(map(int, entry.split(" ")))
-                next(file)
-                break
-        tensor = [float(s) for line in file for s in line.split()]
-
-    return torch.tensor(device='cuda:0', data=tensor, dtype=precisions[u]).reshape(shape)
+        file.readline()
+        shape = list(map(int, file.readline().split()))
+    
+    # Load data efficiently
+    data = np.loadtxt(f"{base}{name}.dns", skiprows=3, dtype=np.float64)
+    
+    return torch.from_numpy(data).to(device='cuda:0', dtype=precisions[u]).reshape(shape)
 
 
 def write_tensor(filename, X):
@@ -241,7 +237,6 @@ def ttmc_mixed_kron(X, U_list, normalizer, ordering, trial):
 
     # Normalize matrices
     t2 = time.time()
-    print("normalizing")
     U_list = normalizer.normalize_matrices(U_list)
     torch.cuda.synchronize()
     matrix_norm_time += (time.time() - t2)

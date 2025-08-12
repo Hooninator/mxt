@@ -258,19 +258,18 @@ def plot_timing_tensor2(tensor_configs, tensor):
 
         fp16_config_one_sided = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "one_sided")).keys())[0]
         fp16_config_kronecker_once = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "kronecker_diag_once")).keys())[0]
-        fp16_config_kronecker_inf = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "kronecker_diag_infnorm")).keys())[0]
+        #fp16_config_kronecker_inf = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp16"), ("matrix_gen", "uniform"), ("norm", "kronecker_diag_infnorm")).keys())[0]
         fp64_config = list(filter_configs(tensor_configs, ("rows", row), ("precision", "fp64"), ("matrix_gen", "uniform"), ("norm", "null")).keys())[0]
 
         phases = {"tensor_norm_time", "matrix_norm_time", "tensor_recover_time", "als_time", "ttm_time"}
 
-        x_labels = ["fp64", "fp16_one_sided", "fp16_kron_once", "fp16_kron_inf"]
+        x_labels = ["fp64", "fp16_one_sided", "fp16_kron_norm"]
         x = np.arange(len(x_labels))
         bottom = np.zeros(len(x_labels))
         for phase in phases:
             y = np.array([tensor_configs[fp64_config][phase].sum(), 
                  tensor_configs[fp16_config_one_sided][phase].sum(),
-                 tensor_configs[fp16_config_kronecker_once][phase].sum(),
-                 tensor_configs[fp16_config_kronecker_inf][phase].sum()]) * 1e3
+                 tensor_configs[fp16_config_kronecker_once][phase].sum()]) * 1e3
             if phase=="als_time":
                 phase = "init_time"
             plt.bar(x, y, label=phase, edgecolor='black', zorder=2, bottom=bottom)

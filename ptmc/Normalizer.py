@@ -114,16 +114,16 @@ class NormalizerTwoSided(NormalizerStandard):
         X = X if X.dtype == self.out else X.to(self.out)
 
         # D^-1
-        self.D_mat.reciprocal_()
+        self.D_mat.reciprocal_().mul_(1/(self.theta*self.theta))
         row_shape = [-1 if i == mode else 1 for i in range(X.ndim)]
-        X.mul_(self.D_mat.view(row_shape))
 
         # S^-1
         self.S_mat.reciprocal_()
         col_shape = [dims[i] if i != mode else 1 for i in range(X.ndim)]
-        X.mul_(self.S_mat.view(col_shape))
 
-        X.mul_(1.0 / (self.theta * self.theta))
+        X.mul_(self.D_mat.view(row_shape)).mul_(self.S_mat.view(col_shape))
+
+        #X.mul_(1.0 / (self.theta * self.theta))
 
         return X
 
@@ -225,7 +225,6 @@ class KroneckerNormalizerDiag(KroneckerNormalizer):
 
     def normalize_matrices(self, U_list):
         N = len(U_list)
-        print(N)
         return [self.normalize_matrix(U_list[n], n) for n in range(N)]
 
 
@@ -242,16 +241,16 @@ class KroneckerNormalizerDiag(KroneckerNormalizer):
 
 
     def recover_tensor(self, X):
-        #X = recover_kron_norm.diag_unscale_forward(X, self.R_mats, 1/(self.theta**(X.ndim + 1)), True, self.out)
-        X = X if X.dtype==self.out else X.to(self.out)
-        for mode, d in enumerate(self.R_mats):
-            # Reshape d to be broadcastable to X
-            shape = [1] * X.ndim
-            shape[mode] = -1
-            if mode==0:
-                X = X * (d.view(shape) * (1/self.theta**(X.ndim+1)))
-            else:
-                X = X * d.view(shape) 
+        X = recover_kron_norm.diag_unscale_forward2(X, self.R_mats, 1/(self.theta**(X.ndim + 1)), True, self.out)
+        #X = X if X.dtype==self.out else X.to(self.out)
+        #for mode, d in enumerate(self.R_mats):
+        #    # Reshape d to be broadcastable to X
+        #    shape = [1] * X.ndim
+        #    shape[mode] = -1
+        #    if mode==0:
+        #        X = X * (d.view(shape) * (1/self.theta**(X.ndim+1)))
+        #    else:
+        #        X = X * d.view(shape) 
         return X 
 
 
